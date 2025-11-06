@@ -50,4 +50,83 @@ It is also a starting point for research on:
    ```bash
    mkdir -p /home/bob/Datasets/NTU60_npz
    cp NTU60_CS.npz /home/bob/Datasets/NTU60_npz/
+   
+---
+
+## 🐳 Build and Run the Docker Environment
+
+The repository includes a ready-to-use Dockerfile  
+[`Dockerfile.msg3d-ctrgcn-apex`](Dockerfile.msg3d-ctrgcn-apex)
+that installs **MS-G3D**, **CTR-GCN**, and **NVIDIA Apex** in one image.
+
+### 🧱 Build the image
+
+From the root of this repository:
+
+```bash
+docker build -t skeleton-lab:latest -f Dockerfile.msg3d-ctrgcn-apex .
+```
+
+This step downloads the PyTorch 2.3 CUDA 12.1 runtime image,
+installs Apex, and clones both model repositories.
+
+### 🚀 Run the container (CTR-GCN with .npz)
+
+Mount your dataset and work directory from the host:
+
+```bash
+docker run -it --rm --gpus all \
+  -v /home/user/Datasets/NTU60_npz:/workspace/CTR-GCN/data/ntu \
+  -v /home/user/MS-G3D_workdir:/workspace/work_dir \
+  skeleton-lab:latest
+``
+
+Once inside the container:
+
+```bash
+cd /workspace/CTR-GCN
+```
+
+# Example: train CTR-GCN on NTU60 cross-subject split
+
+```bash
+python main.py \
+  --config ./config/nturgbd-cross-subject/train_joint.yaml \
+  --work-dir ../work_dir/ctrgcn_ntu60_xsub_joint
+```
+
+### 🧪 Run the container (MS-G3D with raw .skeleton files)
+
+If you later download the original NTU RGB+D 60 skeletons:
+
+```bash
+docker run -it --rm --gpus all \
+  -v /home/user/Datasets/NTU_RGBD60/nturgb+d_skeletons:/workspace/data/nturgbd_raw/nturgb+d_skeletons \
+  -v /home/user/Datasets/NTU_RGBD60/NTU_RGBD_samples_with_missing_skeletons.txt:/workspace/data/nturgbd_raw/NTU_RGBD_samples_with_missing_skeletons.txt:ro \
+  -v /home/user/Datasets/NTU_RGBD60_processed:/workspace/MS-G3D/data \
+  -v /home/user/MS-G3D_workdir:/workspace/work_dir \
+  skeleton-lab:latest
+```
+
+Inside:
+
+```bash
+cd /workspace/MS-G3D
+cd data_gen && python ntu_gendata.py && cd ..
+python main.py \
+  --config config/nturgbd-cross-subject/train_joint.yaml \
+  --work-dir work_dir/ntu60/xsub/msg3d_joint \
+  --device 0 \
+  --half
+```
+
+### 🧩 Notes
+
+- --gpus all enables CUDA inside the container (requires nvidia-container-toolkit).
+
+- Adjust all /home/user/... paths to match your own directories.
+
+- The --half flag activates NVIDIA Apex mixed precision, reducing memory use.
+
+- All experiment outputs are saved under your mounted work_dir folder.
 
