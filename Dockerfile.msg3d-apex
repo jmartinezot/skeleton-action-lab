@@ -1,0 +1,54 @@
+# ============================================================
+# MS-G3D + NVIDIA Apex for skeleton-based action recognition
+# ============================================================
+
+# Base: PyTorch 2.3 with CUDA 12.1 and cuDNN8 (Ubuntu 22.04 compatible)
+FROM pytorch/pytorch:2.3.0-cuda12.1-cudnn8-runtime
+
+# Avoid interactive apt prompts
+ENV DEBIAN_FRONTEND=noninteractive \
+    TZ=Etc/UTC \
+    PYTHONUNBUFFERED=1
+
+# ------------------------------------------------------------------
+# System dependencies
+# ------------------------------------------------------------------
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    wget \
+    vim \
+    ffmpeg \
+    ca-certificates \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+
+# ------------------------------------------------------------------
+# Install NVIDIA Apex for mixed-precision training (--half flag)
+# ------------------------------------------------------------------
+RUN git clone https://github.com/NVIDIA/apex.git && \
+    cd apex && \
+    pip install -v --no-cache-dir --disable-pip-version-check . && \
+    cd .. && rm -rf apex
+
+# ------------------------------------------------------------------
+# Clone and prepare MS-G3D
+# ------------------------------------------------------------------
+RUN git clone https://github.com/kenziyuliu/MS-G3D.git
+
+# Add MS-G3D to Python path
+ENV PYTHONPATH=/workspace/MS-G3D:$PYTHONPATH
+
+# Install Python dependencies for MS-G3D
+RUN pip install --no-cache-dir \
+    pyyaml \
+    tqdm \
+    tensorboardX
+
+# Create common directories (mounted from host later)
+RUN mkdir -p /workspace/data /workspace/work_dir
+
+# Default command: open an interactive shell
+CMD ["/bin/bash"]
+
