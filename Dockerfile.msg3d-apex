@@ -1,5 +1,5 @@
 # ============================================================
-# MS-G3D + NVIDIA Apex for skeleton-based action recognition
+# Skeleton Action Lab: MS-G3D + CTR-GCN + NVIDIA Apex
 # ============================================================
 
 # Base: PyTorch 2.3 with CUDA 12.1 and cuDNN8 (Ubuntu 22.04 compatible)
@@ -33,22 +33,32 @@ RUN git clone https://github.com/NVIDIA/apex.git && \
     cd .. && rm -rf apex
 
 # ------------------------------------------------------------------
-# Clone and prepare MS-G3D
+# Clone MS-G3D (skeleton-based action recognition, CVPR 2020)
 # ------------------------------------------------------------------
 RUN git clone https://github.com/kenziyuliu/MS-G3D.git
 
-# Add MS-G3D to Python path
-ENV PYTHONPATH=/workspace/MS-G3D:$PYTHONPATH
+# ------------------------------------------------------------------
+# Clone CTR-GCN (skeleton-based action recognition, ICCV 2021)
+# ------------------------------------------------------------------
+RUN git clone https://github.com/Uason-Chen/CTR-GCN.git
 
-# Install Python dependencies for MS-G3D
+# ------------------------------------------------------------------
+# Python dependencies (common superset for both repos)
+# ------------------------------------------------------------------
 RUN pip install --no-cache-dir \
     pyyaml \
     tqdm \
-    tensorboardX
+    tensorboard \
+    tensorboardX \
+    numpy \
+    opencv-python
 
-# Create common directories (mounted from host later)
+# Add both repos to PYTHONPATH for convenience
+ENV PYTHONPATH=/workspace/MS-G3D:/workspace/CTR-GCN:$PYTHONPATH
+
+# Create generic data / work dirs (to be mounted from host)
 RUN mkdir -p /workspace/data /workspace/work_dir
 
-# Default command: open an interactive shell
+# Default command: open a shell
 CMD ["/bin/bash"]
 
