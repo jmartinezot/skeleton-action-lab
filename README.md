@@ -64,11 +64,11 @@ that installs **MS-G3D**, **CTR-GCN**, and **NVIDIA Apex** in one image.
 From the root of this repository:
 
 ```bash
-docker build -t skeleton-lab:latest -f Dockerfile.msg3d-ctrgcn-apex .
+docker build -t skeleton-lab:latest -f Dockerfile.msg3d-ctrgcn .
 ```
 
 This step downloads the PyTorch 2.3 CUDA 12.1 runtime image,
-installs Apex, and clones both model repositories.
+and clones both model repositories.
 
 ### 🚀 Run the container (CTR-GCN with .npz)
 
@@ -125,8 +125,6 @@ python main.py \
 - --gpus all enables CUDA inside the container (requires nvidia-container-toolkit).
 
 - Adjust all /home/user/... paths to match your own directories.
-
-- The --half flag activates NVIDIA Apex mixed precision, reducing memory use.
 
 - All experiment outputs are saved under your mounted work_dir folder.
 
