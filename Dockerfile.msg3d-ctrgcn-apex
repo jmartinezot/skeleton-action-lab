@@ -25,11 +25,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /workspace
 
 # ------------------------------------------------------------------
-# Install NVIDIA Apex for mixed-precision training (--half flag)
+# Install NVIDIA Apex for mixed-precision training
+# NOTE: --no-build-isolation is IMPORTANT so that PyTorch is visible.
 # ------------------------------------------------------------------
 RUN git clone https://github.com/NVIDIA/apex.git && \
     cd apex && \
-    pip install -v --no-cache-dir --disable-pip-version-check . && \
+    pip install -v --no-cache-dir --disable-pip-version-check --no-build-isolation . && \
     cd .. && rm -rf apex
 
 # ------------------------------------------------------------------
