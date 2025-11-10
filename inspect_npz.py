@@ -1,8 +1,11 @@
 # inspect_npz.py
+import sys
 import numpy as np
 from pathlib import Path
 
-path = Path("data/ntu/NTU60_CS.npz")
+# Allow path override via command-line argument
+path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("data/ntu/NTU60_CS.npz")
+
 if not path.exists():
     raise FileNotFoundError(f"Dataset not found at {path.resolve()}")
 
@@ -14,5 +17,6 @@ print()
 for key in data.files:
     arr = data[key]
     print(f"{key}: shape={arr.shape}, dtype={arr.dtype}")
+
 
 
