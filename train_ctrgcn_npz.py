@@ -83,8 +83,7 @@ def main():
     in_channels = 3
 
     graph_cfg = {
-        "layout": "ntu-rgb+d",
-        "strategy": "spatial",
+        "labeling_mode": "spatial",
     }
 
     model = Model(
