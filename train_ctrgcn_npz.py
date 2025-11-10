@@ -23,9 +23,16 @@ from skeleton_dataset_ctrgcn import NTU60SkeletonDataset
 # Make sure CTR-GCN's *model directory* is on sys.path
 # so we can import ctrgcn.py as a top-level module (no name clash with MS-G3D)
 # ---------------------------------------------------------------------
-CTR_GCN_MODEL_DIR = "/workspace/CTR-GCN/model"
-if CTR_GCN_MODEL_DIR not in sys.path:
-    sys.path.insert(0, CTR_GCN_MODEL_DIR)
+CTR_GCN_ROOT_DIR = Path("/workspace/CTR-GCN")
+CTR_GCN_MODEL_DIR = CTR_GCN_ROOT_DIR / "model"
+
+# Add both the repository root (for modules like ``graph.*``) and the ``model``
+# subdirectory (for ``ctrgcn.py`` itself) so that CTR-GCN's dynamic imports work
+# exactly as they do in the original project.
+for path in (CTR_GCN_MODEL_DIR, CTR_GCN_ROOT_DIR):
+    path_str = str(path)
+    if path_str not in sys.path:
+        sys.path.insert(0, path_str)
 
 try:
     import ctrgcn  # this is /workspace/CTR-GCN/model/ctrgcn.py
