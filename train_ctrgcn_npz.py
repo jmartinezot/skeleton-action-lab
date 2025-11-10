@@ -20,26 +20,22 @@ from torch.cuda.amp import autocast, GradScaler
 from skeleton_dataset_ctrgcn import NTU60SkeletonDataset
 
 # ---------------------------------------------------------------------
-# Make sure CTR-GCN repo is on sys.path
+# Make sure CTR-GCN's *model directory* is on sys.path
+# so we can import ctrgcn.py as a top-level module (no name clash with MS-G3D)
 # ---------------------------------------------------------------------
-CTR_GCN_ROOT = "/workspace/CTR-GCN"
-if CTR_GCN_ROOT not in sys.path:
-    sys.path.insert(0, CTR_GCN_ROOT)
+CTR_GCN_MODEL_DIR = "/workspace/CTR-GCN/model"
+if CTR_GCN_MODEL_DIR not in sys.path:
+    sys.path.insert(0, CTR_GCN_MODEL_DIR)
 
-# ---------------------------------------------------------------------
-# IMPORT CTR-GCN MODEL
-# ---------------------------------------------------------------------
-# In the official repo, the CTR-GCN model lives in model/ctrgcn.py
-# and is referenced as "model.ctrgcn.Model" from configs.
 try:
-    from model import ctrgcn
+    import ctrgcn  # this is /workspace/CTR-GCN/model/ctrgcn.py
     Model = ctrgcn.Model  # type: ignore[attr-defined]
 except Exception as e:
     raise ImportError(
-        "Could not import CTR-GCN Model from /workspace/CTR-GCN/model.\n"
+        "Could not import CTR-GCN Model from /workspace/CTR-GCN/model/ctrgcn.py.\n"
         "Check inside the container with:\n"
         "    ls /workspace/CTR-GCN/model\n"
-        "and adjust the import in train_ctrgcn_npz.py accordingly.\n"
+        "and confirm that ctrgcn.py defines a class named Model.\n"
         f"Original error: {e}"
     )
 
@@ -71,24 +67,27 @@ def main():
     print("Mixed precision (AMP) enabled:", use_amp)
 
     # --------------------------- CTR-GCN Model ---------------------------
-    # Official signature (simplified):
-    #   Model(num_class=60, num_point=25, num_person=2,
-    #         graph=None / "graph.ntu_rgb_d.Graph",
-    #         graph_args={...}, in_channels=3, drop_out=0, adaptive=True)
+    # Common CTR-GCN Model signature:
+    #   Model(num_class, num_point, num_person,
+    #         graph, graph_args, in_channels=3, drop_out=0, adaptive=True, ...)
     #
-    # We use num_class=60 (NTU60), 25 joints, 2 persons, 3 input channels.
+    num_class = 60
+    num_point = 25
+    num_person = 2
+    in_channels = 3
+
     graph_cfg = {
         "layout": "ntu-rgb+d",
         "strategy": "spatial",
     }
 
     model = Model(
-        num_class=60,
-        num_point=25,
-        num_person=2,
+        num_class=num_class,
+        num_point=num_point,
+        num_person=num_person,
         graph="graph.ntu_rgb_d.Graph",
         graph_args=graph_cfg,
-        in_channels=3,
+        in_channels=in_channels,
         drop_out=0.0,
         adaptive=True,
     ).to(device)
@@ -109,7 +108,7 @@ def main():
         optimizer.zero_grad()
 
         with autocast(enabled=use_amp):
-            logits = model(x)  # CTR-GCN expects (B, C, T, V, M)
+            logits = model(x)
             loss = criterion(logits, y)
 
         scaler.scale(loss).backward()
@@ -130,5 +129,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
