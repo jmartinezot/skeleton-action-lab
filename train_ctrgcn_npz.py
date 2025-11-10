@@ -10,6 +10,9 @@ We assume:
 """
 
 from pathlib import Path
+import importlib
+import importlib.machinery
+import importlib.util
 import sys
 
 import torch
@@ -88,11 +91,51 @@ def main():
         "strategy": "spatial",
     }
 
+    graph_target = "graph.ntu_rgb_d.Graph"
+
+    graph_mod_name, _, graph_cls_name = graph_target.rpartition(".")
+    try:
+        graph_mod = importlib.import_module(graph_mod_name)
+    except ModuleNotFoundError:
+        graph_mod = None
+
+    if graph_mod is None or not hasattr(graph_mod, graph_cls_name):
+        graph_file = CTR_GCN_ROOT_DIR / "graph" / "ntu_rgb_d.py"
+        if not graph_file.exists():
+            raise ImportError(
+                "CTR-GCN graph module could not be loaded. Expected to find "
+                f"{graph_file} defining a Graph class."
+            )
+
+        graph_pkg_name = "graph"
+        graph_pkg = sys.modules.get(graph_pkg_name)
+        if graph_pkg is None:
+            graph_pkg = importlib.util.module_from_spec(
+                importlib.machinery.ModuleSpec(graph_pkg_name, loader=None)
+            )
+            graph_pkg.__path__ = [str(CTR_GCN_ROOT_DIR / "graph")]  # type: ignore[attr-defined]
+            sys.modules[graph_pkg_name] = graph_pkg
+
+        spec = importlib.util.spec_from_file_location(
+            graph_mod_name,
+            graph_file,
+            submodule_search_locations=[str(CTR_GCN_ROOT_DIR / "graph")],
+        )
+        if spec is None or spec.loader is None:
+            raise ImportError(
+                "Could not create a module spec for graph.ntu_rgb_d at "
+                f"{graph_file}"
+            )
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[graph_mod_name] = module
+        spec.loader.exec_module(module)
+        graph_mod = module
+
     model = Model(
         num_class=num_class,
         num_point=num_point,
         num_person=num_person,
-        graph="graph.ntu_rgb_d.Graph",
+        graph=graph_target,
         graph_args=graph_cfg,
         in_channels=in_channels,
         drop_out=0.0,
