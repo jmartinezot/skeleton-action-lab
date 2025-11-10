@@ -55,7 +55,7 @@ RUN pip install --no-cache-dir \
 # Copy helper scripts into container workspace
 # (these files must live next to the Dockerfile on the host)
 # ------------------------------------------------------------------
-COPY check_gpu.py inspect_npz.py train_npz_mlp.py convert_ntu60_kaggle_to_ctrgcn.py /workspace/
+COPY check_gpu.py inspect_npz.py train_npz_mlp.py convert_ntu60_kaggle_to_ctrgcn.py skeleton_dataset_ctrgcn.py /workspace/
 
 # Add both repos to PYTHONPATH for convenience
 ENV PYTHONPATH=/workspace/MS-G3D:/workspace/CTR-GCN:${PYTHONPATH}
