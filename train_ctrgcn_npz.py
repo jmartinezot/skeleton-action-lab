@@ -7,12 +7,10 @@ We assume:
     - Converted file at: /workspace/CTR-GCN/data/ntu/NTU60_CS_ctrgcn.npz
     - Dataset: NTU60SkeletonDataset (our own)
     - CTR-GCN repo cloned at: /workspace/CTR-GCN
-
-You may need to slightly adjust the import of `Model` depending on the CTR-GCN repo
-layout (see comments below).
 """
 
 from pathlib import Path
+import sys
 
 import torch
 import torch.nn as nn
@@ -22,27 +20,26 @@ from torch.cuda.amp import autocast, GradScaler
 from skeleton_dataset_ctrgcn import NTU60SkeletonDataset
 
 # ---------------------------------------------------------------------
+# Make sure CTR-GCN repo is on sys.path
+# ---------------------------------------------------------------------
+CTR_GCN_ROOT = "/workspace/CTR-GCN"
+if CTR_GCN_ROOT not in sys.path:
+    sys.path.insert(0, CTR_GCN_ROOT)
+
+# ---------------------------------------------------------------------
 # IMPORT CTR-GCN MODEL
 # ---------------------------------------------------------------------
-# This is a best guess based on common CTR-GCN layouts:
-#   - model/ctrgcn.py contains a class `Model`
-#   - model/__init__.py may expose it
-#
-# If this import fails inside the container, run:
-#   ls /workspace/CTR-GCN/model
-# and adjust accordingly, e.g.:
-#   from model.ctrgcn import Model
-# or:
-#   from CTR-GCN.model.ctrgcn import Model
-# depending on PYTHONPATH.
-# ---------------------------------------------------------------------
+# In the official repo, the CTR-GCN model lives in model/ctrgcn.py
+# and is referenced as "model.ctrgcn.Model" from configs.
 try:
-    from model.ctrgcn import Model  # type: ignore
-except ImportError as e:
+    from model import ctrgcn
+    Model = ctrgcn.Model  # type: ignore[attr-defined]
+except Exception as e:
     raise ImportError(
-        "Could not import CTR-GCN Model. "
-        "Please check /workspace/CTR-GCN/model for the correct module name "
-        "and adjust the import in train_ctrgcn_npz.py.\n"
+        "Could not import CTR-GCN Model from /workspace/CTR-GCN/model.\n"
+        "Check inside the container with:\n"
+        "    ls /workspace/CTR-GCN/model\n"
+        "and adjust the import in train_ctrgcn_npz.py accordingly.\n"
         f"Original error: {e}"
     )
 
@@ -52,11 +49,11 @@ def main():
     if not npz_path.exists():
         raise FileNotFoundError(f"NPZ not found at {npz_path}")
 
-    # Dataset & loader
+    # --------------------------- Dataset & loader ---------------------------
     train_ds = NTU60SkeletonDataset(
         npz_path=npz_path,
         split="train",
-        use_both_persons=True,  # or False if you want single-person only
+        use_both_persons=True,  # keep both persons, shape: (B, 3, T, 25, 2)
     )
 
     train_loader = DataLoader(
@@ -73,61 +70,46 @@ def main():
     print("Using device:", device)
     print("Mixed precision (AMP) enabled:", use_amp)
 
-    # -----------------------------------------------------------------
-    # Instantiate CTR-GCN Model
-    # -----------------------------------------------------------------
-    # Common CTR-GCN Model signature:
-    #   Model(num_class, num_point, num_person, graph, graph_args, in_channels=3, ...)
+    # --------------------------- CTR-GCN Model ---------------------------
+    # Official signature (simplified):
+    #   Model(num_class=60, num_point=25, num_person=2,
+    #         graph=None / "graph.ntu_rgb_d.Graph",
+    #         graph_args={...}, in_channels=3, drop_out=0, adaptive=True)
     #
-    # For our data:
-    #   num_class  = 60
-    #   num_point  = 25
-    #   num_person = 2
-    #
-    # `graph` and `graph_args` will depend on the repo; often they use a
-    # graph class like "graph.ntu_rgb_d.Graph". We'll start with a minimal
-    # setting and you can adjust to match the original configs.
-    # -----------------------------------------------------------------
-    num_class = 60
-    num_point = 25
-    num_person = 2
-    in_channels = 3
-
-    # Minimal graph config (you may tweak this to match CTR-GCN examples)
+    # We use num_class=60 (NTU60), 25 joints, 2 persons, 3 input channels.
     graph_cfg = {
         "layout": "ntu-rgb+d",
         "strategy": "spatial",
     }
 
-    # Many CTR-GCN repos call:
-    #   model = Model(num_class=num_class, num_point=num_point, num_person=num_person,
-    #                 graph="graph.ntu_rgb_d.Graph", graph_args=graph_cfg, in_channels=in_channels)
-    # Adjust if necessary once you inspect the actual Model.__init__ signature.
     model = Model(
-        num_class=num_class,
-        num_point=num_point,
-        num_person=num_person,
+        num_class=60,
+        num_point=25,
+        num_person=2,
         graph="graph.ntu_rgb_d.Graph",
         graph_args=graph_cfg,
-        in_channels=in_channels,
+        in_channels=3,
+        drop_out=0.0,
+        adaptive=True,
     ).to(device)
 
-    # Optimiser & loss
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     criterion = nn.CrossEntropyLoss()
     scaler = GradScaler(enabled=use_amp)
 
     model.train()
-    max_iters = 100  # short sanity run to see if everything wires up
+    max_iters = 100  # short sanity run
 
     for i, (x, y) in enumerate(train_loader):
-        x = x.to(device, non_blocking=True)  # (B, C, T, V, M)
-        y = y.to(device, non_blocking=True)  # (B,)
+        # x: (B, 3, T, 25, 2)
+        # y: (B,)
+        x = x.to(device, non_blocking=True)
+        y = y.to(device, non_blocking=True)
 
         optimizer.zero_grad()
 
         with autocast(enabled=use_amp):
-            logits = model(x)  # CTR-GCN expects (B, C, T, V, M)-like input
+            logits = model(x)  # CTR-GCN expects (B, C, T, V, M)
             loss = criterion(logits, y)
 
         scaler.scale(loss).backward()
@@ -148,4 +130,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
