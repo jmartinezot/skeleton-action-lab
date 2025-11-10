@@ -10,9 +10,6 @@ We assume:
 """
 
 from pathlib import Path
-import importlib
-import importlib.machinery
-import importlib.util
 import sys
 
 import torch
@@ -23,27 +20,30 @@ from torch.cuda.amp import autocast, GradScaler
 from skeleton_dataset_ctrgcn import NTU60SkeletonDataset
 
 # ---------------------------------------------------------------------
-# Make sure CTR-GCN's *model directory* is on sys.path
-# so we can import ctrgcn.py as a top-level module (no name clash with MS-G3D)
+# Ensure CTR-GCN root is FIRST on sys.path so its `model` and `graph`
+# packages shadow MS-G3D's.
 # ---------------------------------------------------------------------
-CTR_GCN_ROOT_DIR = Path("/workspace/CTR-GCN")
-CTR_GCN_MODEL_DIR = CTR_GCN_ROOT_DIR / "model"
+CTR_GCN_ROOT = "/workspace/CTR-GCN"
+MS_G3D_ROOT = "/workspace/MS-G3D"
 
-# Add both the repository root (for modules like ``graph.*``) and the ``model``
-# subdirectory (for ``ctrgcn.py`` itself) so that CTR-GCN's dynamic imports work
-# exactly as they do in the original project.
-for path in (CTR_GCN_MODEL_DIR, CTR_GCN_ROOT_DIR):
-    path_str = str(path)
-    if path_str not in sys.path:
-        sys.path.insert(0, path_str)
+# Remove any existing entries so we control the order
+if CTR_GCN_ROOT in sys.path:
+    sys.path.remove(CTR_GCN_ROOT)
+if MS_G3D_ROOT in sys.path:
+    sys.path.remove(MS_G3D_ROOT)
 
+# New order: CTR-GCN first, then MS-G3D
+sys.path.insert(0, CTR_GCN_ROOT)
+sys.path.append(MS_G3D_ROOT)
+
+# Now `model` and `graph` should resolve to CTR-GCN by default
 try:
-    import ctrgcn  # this is /workspace/CTR-GCN/model/ctrgcn.py
-    Model = ctrgcn.Model  # type: ignore[attr-defined]
+    from model import ctrgcn  # /workspace/CTR-GCN/model/ctrgcn.py
+    Model = ctrgcn.Model
 except Exception as e:
     raise ImportError(
         "Could not import CTR-GCN Model from /workspace/CTR-GCN/model/ctrgcn.py.\n"
-        "Check inside the container with:\n"
+        "Inside the container, try:\n"
         "    ls /workspace/CTR-GCN/model\n"
         "and confirm that ctrgcn.py defines a class named Model.\n"
         f"Original error: {e}"
@@ -59,7 +59,7 @@ def main():
     train_ds = NTU60SkeletonDataset(
         npz_path=npz_path,
         split="train",
-        use_both_persons=True,  # keep both persons, shape: (B, 3, T, 25, 2)
+        use_both_persons=True,  # (B, 3, T, 25, 2)
     )
 
     train_loader = DataLoader(
@@ -77,10 +77,6 @@ def main():
     print("Mixed precision (AMP) enabled:", use_amp)
 
     # --------------------------- CTR-GCN Model ---------------------------
-    # Common CTR-GCN Model signature:
-    #   Model(num_class, num_point, num_person,
-    #         graph, graph_args, in_channels=3, drop_out=0, adaptive=True, ...)
-    #
     num_class = 60
     num_point = 25
     num_person = 2
@@ -91,51 +87,11 @@ def main():
         "strategy": "spatial",
     }
 
-    graph_target = "graph.ntu_rgb_d.Graph"
-
-    graph_mod_name, _, graph_cls_name = graph_target.rpartition(".")
-    try:
-        graph_mod = importlib.import_module(graph_mod_name)
-    except ModuleNotFoundError:
-        graph_mod = None
-
-    if graph_mod is None or not hasattr(graph_mod, graph_cls_name):
-        graph_file = CTR_GCN_ROOT_DIR / "graph" / "ntu_rgb_d.py"
-        if not graph_file.exists():
-            raise ImportError(
-                "CTR-GCN graph module could not be loaded. Expected to find "
-                f"{graph_file} defining a Graph class."
-            )
-
-        graph_pkg_name = "graph"
-        graph_pkg = sys.modules.get(graph_pkg_name)
-        if graph_pkg is None:
-            graph_pkg = importlib.util.module_from_spec(
-                importlib.machinery.ModuleSpec(graph_pkg_name, loader=None)
-            )
-            graph_pkg.__path__ = [str(CTR_GCN_ROOT_DIR / "graph")]  # type: ignore[attr-defined]
-            sys.modules[graph_pkg_name] = graph_pkg
-
-        spec = importlib.util.spec_from_file_location(
-            graph_mod_name,
-            graph_file,
-            submodule_search_locations=[str(CTR_GCN_ROOT_DIR / "graph")],
-        )
-        if spec is None or spec.loader is None:
-            raise ImportError(
-                "Could not create a module spec for graph.ntu_rgb_d at "
-                f"{graph_file}"
-            )
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[graph_mod_name] = module
-        spec.loader.exec_module(module)
-        graph_mod = module
-
     model = Model(
         num_class=num_class,
         num_point=num_point,
         num_person=num_person,
-        graph=graph_target,
+        graph="graph.ntu_rgb_d.Graph",
         graph_args=graph_cfg,
         in_channels=in_channels,
         drop_out=0.0,
@@ -179,6 +135,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
