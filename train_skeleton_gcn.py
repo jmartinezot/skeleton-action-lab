@@ -4,6 +4,7 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
+from torch.cuda.amp import autocast, GradScaler
 
 from skeleton_dataset_ctrgcn import NTU60SkeletonDataset
 
@@ -14,6 +15,7 @@ class SimpleSTBackbone(nn.Module):
     - Uses first person only: (B, C, T, V)
     - Temporal 1D convs over T
     - Linear over joints
+
     This is NOT a real ST-GCN, just a cheap baseline to stress the pipeline.
     """
     def __init__(self, num_classes: int = 60, in_channels: int = 3, T: int = 300, V: int = 25):
@@ -49,33 +51,46 @@ def main():
     loader = DataLoader(ds, batch_size=16, shuffle=True, num_workers=4, pin_memory=True)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    use_amp = device.type == "cuda"
+
     print("Using device:", device)
+    print("Mixed precision (AMP) enabled:", use_amp)
 
     model = SimpleSTBackbone(num_classes=60).to(device)
     optim = torch.optim.Adam(model.parameters(), lr=1e-3)
     crit = nn.CrossEntropyLoss()
 
+    scaler = GradScaler(enabled=use_amp)
+
     model.train()
     max_iters = 100  # just a short test run
+
     for i, (x, y) in enumerate(loader):
         x = x.to(device, non_blocking=True)
         y = y.to(device, non_blocking=True)
 
         optim.zero_grad()
-        logits = model(x)
-        loss = crit(logits, y)
-        loss.backward()
-        optim.step()
+
+        # Forward pass with autocast if AMP is enabled
+        with autocast(enabled=use_amp):
+            logits = model(x)
+            loss = crit(logits, y)
+
+        # Backward + step with GradScaler if AMP is enabled
+        scaler.scale(loss).backward()
+        scaler.step(optim)
+        scaler.update()
 
         if i % 10 == 0:
-            pred = logits.argmax(dim=1)
-            acc = (pred == y).float().mean().item()
+            with torch.no_grad():
+                pred = logits.argmax(dim=1)
+                acc = (pred == y).float().mean().item()
             print(f"[{i}/{max_iters}] loss={loss.item():.4f}, acc={acc:.3f}")
 
         if i >= max_iters:
             break
 
-    print("Finished SimpleSTBackbone sanity training.")
+    print("Finished SimpleSTBackbone AMP sanity training.")
 
 
 if __name__ == "__main__":
