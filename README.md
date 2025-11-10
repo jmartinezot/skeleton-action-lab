@@ -70,6 +70,23 @@ docker build -t skeleton-lab:latest -f Dockerfile.msg3d-ctrgcn .
 This step downloads the PyTorch 2.3 CUDA 12.1 runtime image,
 and clones both model repositories.
 
+### 📜 Helper scripts included in the image
+
+Several utility scripts ship with the Docker image to make quick GPU and dataset
+checks easier. They live at the repository root so the `COPY` instruction in the
+Dockerfile can add them to `/workspace/` inside the container:
+
+| Script | Purpose |
+|--------|---------|
+| `check_gpu.py` | Prints CUDA availability, device count, device name, and the PyTorch/CUDA versions so you can confirm the container sees your GPU. |
+| `inspect_npz.py` | Dumps the keys, shapes, and dtypes in an NTU60 `.npz` archive (defaults to `/workspace/CTR-GCN/data/ntu/NTU60_CS.npz`) to verify downloads and mounts. |
+| `convert_ntu60_kaggle_to_ctrgcn.py` | Converts the Kaggle-style `NTU60_CS.npz` (`(N, T, D=150)` with one-hot labels) into the `(N, C, T, V, M)` layout used by CTR-GCN and saves `NTU60_CS_ctrgcn.npz`. |
+| `skeleton_dataset_ctrgcn.py` | Defines a PyTorch `Dataset` for the converted skeleton tensors, optionally dropping the second person stream, and includes a loader sanity check. |
+| `train_npz_mlp.py` | Runs a lightweight MLP baseline directly on the Kaggle `.npz` file to stress-test your GPU/VRAM and confirm the data loads. |
+| `train_skeleton_gcn.py` | Trains a toy spatio-temporal baseline built on `skeleton_dataset_ctrgcn.py` to validate the end-to-end skeleton pipeline. |
+
+Feel free to run any of these scripts inside the container (e.g., `python check_gpu.py`).
+
 ### 🚀 Run the container (CTR-GCN with .npz)
 
 Mount your dataset and work directory from the host:
