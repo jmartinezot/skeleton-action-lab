@@ -97,7 +97,10 @@ p.write_text(s2, encoding='utf-8')
 print('Patched main.py: PyYAML loader + optional Apex')
 PY
 
-
+# ------------------------------------------------------------------
+# Copy the NPZ→MS-G3D converter script into the image
+# ------------------------------------------------------------------
+COPY convert_ctr_npz_to_msg3d.py /workspace/MS-G3D/convert_ctr_npz_to_msg3d.py
 
 # (Optional) expose repo root for imports when running outside the repo dir
 ENV PYTHONPATH=/workspace/MS-G3D:${PYTHONPATH}
