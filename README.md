@@ -93,10 +93,10 @@ Mount your dataset and work directory from the host:
 
 ```bash
 docker run -it --rm --gpus all \
-  -v /home/user/Datasets/NTU60_npz:/workspace/CTR-GCN/data/ntu \
-  -v /home/user/MS-G3D_workdir:/workspace/work_dir \
+  --mount type=bind,source="$HOME/Datasets/NTU60_npz",target=/workspace/CTR-GCN/data/ntu \
+  --mount type=bind,source="$HOME/work_dir/msg3d-apex",target=/workspace/work_dir \
   skeleton-lab:latest
-``
+```
 
 Once inside the container:
 
@@ -104,7 +104,7 @@ Once inside the container:
 cd /workspace/CTR-GCN
 ```
 
-# Example: train CTR-GCN on NTU60 cross-subject split
+## Example: train CTR-GCN on NTU60 cross-subject split
 
 ```bash
 python main.py \
