@@ -1,16 +1,18 @@
 # To build this image:
-# docker build -f msg3d.docker -t skeleton-lab:msg3d .
+# docker build -f msg3d.docker -t msg3d .
 #
 # To run a container:
 # docker run -it --rm --gpus all --shm-size=8g \
-#   -v $HOME/Datasets/NTU_RGBD60/nturgb+d_skeletons:/workspace/data/nturgbd_raw/nturgb+d_skeletons \
-#   -v $HOME/Datasets/NTU_RGBD60/NTU_RGBD_samples_with_missing_skeletons.txt:/workspace/data/nturgbd_raw/NTU_RGBD_samples_with_missing_skeletons.txt:ro \
-#   -v $HOME/Datasets/NTU_RGBD60_processed:/workspace/MS-G3D/data \
-#   -v $HOME/work_dir/msg3d:/workspace/work_dir \
-#   skeleton-lab:msg3d
+# --mount type=bind,source="$HOME/Datasets/NTU_RGBD60/nturgb+d_skeletons",target=/workspace/data/nturgbd_raw/nturgb+d_skeletons \
+# --mount type=bind,source="$HOME/Datasets/NTU_RGBD60/NTU_RGBD_samples_with_missing_skeletons.txt
+",target=/workspace/data/nturgbd_raw/NTU_RGBD_samples_with_missing_skeletons.txt:ro \
+# --mount type=bind,source="$HOME/Datasets/NTU_RGBD60_processed",target=/workspace/MS-G3D/data \
+# --mount type=bind,source="$HOME/work_dir/msg3d",target=/workspace/work_dir \
+#   msg3d
+#
 #
 # Inside the container:
-# /workspace/MS-G3D# python main.py --config config/nturgbd-cross-subject/train_joint.yaml --work-dir work_dir/ntu60/xsub/msg3d_joint --device 0 --half
+# /workspace/MS-G3D# 
 #
 #
 # ============================================================
@@ -43,36 +45,6 @@ WORKDIR /workspace
 # Clone MS-G3D (skeleton-based action recognition, CVPR 2020)
 # ------------------------------------------------------------------
 RUN git clone https://github.com/kenziyuliu/MS-G3D.git
-
-# ------------------------------------------------------------------
-# Python deps (keep torch from base image)
-# - Use headless OpenCV to reduce image size
-# - Pin numpy conservatively to avoid old code edge cases
-# ------------------------------------------------------------------
-RUN pip install --no-cache-dir \
-    yacs \
-    tqdm \
-    tensorboard \
-    tensorboardX \
-    "numpy<2.0" \
-    scipy \
-    matplotlib \
-    opencv-python-headless \
-    pillow \
-    scikit-learn \
-    scikit-image \
-    tabulate \
-    thop \
-    fvcore \
-    iopath \
-    pyyaml \
-    "onnx>=1.12" \
-    easydict
-
-# ------------------------------------------------------------------
-# Patch MS-G3D for modern PyYAML defaults (>=5.1 requires Loader)
-# ------------------------------------------------------------------
-RUN sed -i "s/yaml.load(f)/yaml.load(f, Loader=yaml.FullLoader)/" /workspace/MS-G3D/main.py
 
 # (Optional) expose repo root for imports when running outside the repo dir
 ENV PYTHONPATH=/workspace/MS-G3D:${PYTHONPATH}
