@@ -93,9 +93,9 @@ Mount your dataset and work directory from the host:
 
 ```bash
 docker run -it --rm --gpus all \
+  --shm-size=8g \
   --mount type=bind,source="$HOME/Datasets/NTU60_npz",target=/workspace/CTR-GCN/data/ntu \
-  --mount type=bind,source="$HOME/work_dir/msg3d-apex",target=/workspace/work_dir \
-  skeleton-lab:latest
+  ctrgcn
 ```
 
 Once inside the container:
@@ -108,7 +108,7 @@ cd /workspace/CTR-GCN
 
 ```bash
 python main.py \
-  --config ./config/nturgbd-cross-subject/train_joint.yaml \
+  --config ./config/nturgbd-cross-subject/default.yaml \
   --work-dir ../work_dir/ctrgcn_ntu60_xsub_joint
 ```
 
