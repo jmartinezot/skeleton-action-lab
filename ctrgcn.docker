@@ -39,6 +39,7 @@ RUN git clone https://github.com/Uason-Chen/CTR-GCN.git
 # Python deps (keep torch from base image)
 # - Use headless OpenCV to reduce image size
 # - Pin numpy conservatively to avoid old code edge cases
+# - Include torchpack+pavi for PaviLogger compatibility
 # ------------------------------------------------------------------
 RUN pip install --no-cache-dir \
     yacs \
@@ -56,13 +57,53 @@ RUN pip install --no-cache-dir \
     thop \
     fvcore \
     iopath \
-    pyyaml
+    pyyaml \
+    h5py \
+    "torchpack>=0.3.1" \
+    pavi
 
 # ------------------------------------------------------------------
 # Install CTR-GCN's local torchlight (and ensure no conflicting one)
 # ------------------------------------------------------------------
 RUN pip uninstall -y torchlight || true && \
     pip install --no-cache-dir -e /workspace/CTR-GCN/torchlight
+    
+# ------------------------------------------------------------------
+# Patches for modern environments
+# 1) PyYAML >=5.1: yaml.load(...) requires Loader
+# 2) Torchpack API drift: make Pavi import optional/compatible
+# ------------------------------------------------------------------
+
+# Patch main.py to use yaml.FullLoader
+RUN sed -i 's/yaml.load(f)/yaml.load(f, Loader=yaml.FullLoader)/' /workspace/CTR-GCN/main.py
+
+# Patch torchlight util.py to support old/new torchpack (or no pavi)
+RUN python - <<'PY'
+p = "/workspace/CTR-GCN/torchlight/torchlight/util.py"
+s = open(p, "r", encoding="utf-8").read()
+needle = "from torchpack.runner.hooks import PaviLogger"
+if needle in s:
+    s = s.replace(
+        needle,
+        "try:\n"
+        "    # Older torchpack API\n"
+        "    from torchpack.runner.hooks import PaviLogger\n"
+        "except Exception:\n"
+        "    try:\n"
+        "        # Newer torchpack API\n"
+        "        from torchpack.callbacks import PaviLogger  # type: ignore\n"
+        "    except Exception:\n"
+        "        # Fallback no-op logger\n"
+        "        class PaviLogger:  # type: ignore\n"
+        "            def __init__(self, *a, **k): pass\n"
+        "            def before_train(self, *a, **k): pass\n"
+        "            def after_train(self, *a, **k): pass\n"
+    )
+    open(p, "w", encoding="utf-8").write(s)
+else:
+    # If code changes upstream, only patch when pattern exists
+    print("Pavi import pattern not found; skipping patch.")
+PY
 
 # (Optional) expose repo root for imports when running outside the repo dir
 ENV PYTHONPATH=/workspace/CTR-GCN:${PYTHONPATH}
