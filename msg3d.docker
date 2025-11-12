@@ -60,6 +60,37 @@ RUN pip install --no-cache-dir \
     h5py \
     onnx
 
+# --- Patch: PyYAML FullLoader + make Apex optional (idempotent) ---
+RUN python - <<'PY'\n\
+import pathlib, re\n\
+p = pathlib.Path('/workspace/MS-G3D/main.py')\n\
+s = p.read_text(encoding='utf-8')\n\
+# 1) yaml.load(f) -> yaml.load(f, Loader=yaml.FullLoader)\n\
+s2 = re.sub(r'yaml\\s*\\.\\s*load\\(([^,\\n)]+)\\)', r'yaml.load(\\1, Loader=yaml.FullLoader)', s)\n\
+# 2) Optional Apex import block\n\
+# Remove any existing bare apex imports first\n\
+s2 = re.sub(r'^\\s*import\\s+apex\\s*\\n', '', s2, flags=re.M)\n\
+s2 = re.sub(r'^\\s*from\\s+apex\\s+import\\s+amp\\s*\\n', '', s2, flags=re.M)\n\
+# Insert guarded import right after tensorboardX import (or after torch import fallback)\n\
+anchor_patterns = [r'from\\s+tensorboardX\\s+import\\s+SummaryWriter', r'import\\s+torch']\n\
+guard = (\"\\ntry:\\n\"\n\
+         \"    import apex\\n\"\n\
+         \"    from apex import amp\\n\"\n\
+         \"    _APEX = True\\n\"\n\
+         \"except Exception:\\n\"\n\
+         \"    amp = None\\n\"\n\
+         \"    _APEX = False\\n\")\n\
+for pat in anchor_patterns:\n\
+    m = re.search(pat, s2)\n\
+    if m and guard not in s2:\n\
+        insert_pos = m.end()\n\
+        s2 = s2[:insert_pos] + \"\\n\" + guard + s2[insert_pos:]\n\
+        break\n\
+p.write_text(s2, encoding='utf-8')\n\
+print('Patched main.py: PyYAML loader + optional Apex')\n\
+PY
+
+
 # (Optional) expose repo root for imports when running outside the repo dir
 ENV PYTHONPATH=/workspace/MS-G3D:${PYTHONPATH}
 
