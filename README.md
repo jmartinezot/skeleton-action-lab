@@ -1,10 +1,15 @@
 # Skeleton Action Lab 🧠
 
 This repository provides a **Dockerized research environment** for experimenting with
-**skeleton-based action recognition** on the NTU RGB+D 60 dataset using two state-of-the-art
-graph-based models:
+**skeleton-based action recognition** on the NTU RGB+D 60 dataset. Each model ships with its
+own Dockerfile so you can build lean, model-specific images. For example, `ctrgcn.docker`
+builds a container with the CTR-GCN dependencies and `msg3d.docker` provisions the
+MS-G3D toolchain, while additional Dockerfiles can be added alongside them for other
+backbones.
 
-- **MS-G3D** (Multi-Scale Graph 3D Network, CVPR 2020) – classic multi-scale ST-GCN backbone  
+Currently included models:
+
+- **MS-G3D** (Multi-Scale Graph 3D Network, CVPR 2020) – classic multi-scale ST-GCN backbone
 - **CTR-GCN** (Channel-wise Topology Refinement Graph Convolutional Network, ICCV 2021) – strong, widely used baseline that operates directly on preprocessed `.npz` files
 
 The environment is designed to answer a very practical question:
@@ -23,9 +28,11 @@ It is also a starting point for research on:
 
 - 🐳 **Docker-based**: reproducible experiments in a single container  
 - ⚙️ **NVIDIA Apex** preinstalled for mixed-precision training (saves VRAM, speeds up training)  
-- 🧠 **Two backbones in one image**:
-  - `MS-G3D/` – expects original NTU `.skeleton` files (raw skeleton format)  
-  - `CTR-GCN/` – works directly with `NTU60_CS.npz` / `NTU60_CV.npz` (preprocessed format)  
+- 🧠 **Model-specific Dockerfiles** (build only what you need):
+  - `ctrgcn.docker` – builds an image tailored for CTR-GCN experiments with preprocessed `.npz` tensors
+  - `msg3d.docker` – installs the MS-G3D pipeline (data generation + training) without CTR-GCN extras
+  - `Dockerfile.msg3d-ctrgcn` – optional legacy combo image kept for cross-checking multi-model workflows
+  - Add new Dockerfiles (e.g., `stgcn.docker`, `mim.docker`) as more models are integrated
 - 🧱 Built on **PyTorch 2.3 + CUDA 12.1** runtime
 
 ---
@@ -53,22 +60,33 @@ It is also a starting point for research on:
    
 ---
 
-## 🐳 Build and Run the Docker Environment
+## 🐳 Build and Run the Docker Environments
 
-The repository includes a ready-to-use Dockerfile  
-[`Dockerfile.msg3d-ctrgcn-apex`](Dockerfile.msg3d-ctrgcn-apex)
-that installs **MS-G3D**, **CTR-GCN**, and **NVIDIA Apex** in one image.
+Pick the Dockerfile that matches the model you want to explore. Each Dockerfile lives at the
+repository root and builds a self-contained environment for that model. For example,
+[`ctrgcn.docker`](ctrgcn.docker) installs only the CTR-GCN stack and
+[`msg3d.docker`](msg3d.docker) focuses solely on MS-G3D, while
+[`Dockerfile.msg3d-ctrgcn`](Dockerfile.msg3d-ctrgcn) remains available if you still need the
+combined setup.
 
 ### 🧱 Build the image
 
 From the root of this repository:
 
 ```bash
-docker build -t skeleton-lab:latest -f Dockerfile.msg3d-ctrgcn .
+# Build the CTR-GCN-only image
+docker build -t skeleton-lab:ctrgcn -f ctrgcn.docker .
+
+# Build the MS-G3D-only image
+docker build -t skeleton-lab:msg3d -f msg3d.docker .
+
+# (Optional) build the combined MS-G3D + CTR-GCN image for comparison
+docker build -t skeleton-lab:msg3d-ctrgcn -f Dockerfile.msg3d-ctrgcn .
 ```
 
-This step downloads the PyTorch 2.3 CUDA 12.1 runtime image,
-and clones both model repositories.
+Add more build commands as you introduce Dockerfiles for new models. Each build downloads the
+base PyTorch 2.3 CUDA 12.1 runtime image and installs the dependencies required by that
+specific model.
 
 ### 📜 Helper scripts included in the image
 
@@ -95,7 +113,7 @@ Mount your dataset and work directory from the host:
 docker run -it --rm --gpus all \
   --shm-size=8g \
   --mount type=bind,source="$HOME/Datasets/NTU60_npz",target=/workspace/CTR-GCN/data/ntu \
-  ctrgcn
+  skeleton-lab:ctrgcn
 ```
 
 Once inside the container:
@@ -122,7 +140,7 @@ docker run -it --rm --gpus all \
   -v /home/user/Datasets/NTU_RGBD60/NTU_RGBD_samples_with_missing_skeletons.txt:/workspace/data/nturgbd_raw/NTU_RGBD_samples_with_missing_skeletons.txt:ro \
   -v /home/user/Datasets/NTU_RGBD60_processed:/workspace/MS-G3D/data \
   -v /home/user/MS-G3D_workdir:/workspace/work_dir \
-  skeleton-lab:latest
+  skeleton-lab:msg3d
 ```
 
 Inside:

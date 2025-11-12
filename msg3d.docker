@@ -1,0 +1,90 @@
+# To build this image:
+# docker build -f msg3d.docker -t skeleton-lab:msg3d .
+#
+# To run a container:
+# docker run -it --rm --gpus all --shm-size=8g \
+#   -v $HOME/Datasets/NTU_RGBD60/nturgb+d_skeletons:/workspace/data/nturgbd_raw/nturgb+d_skeletons \
+#   -v $HOME/Datasets/NTU_RGBD60/NTU_RGBD_samples_with_missing_skeletons.txt:/workspace/data/nturgbd_raw/NTU_RGBD_samples_with_missing_skeletons.txt:ro \
+#   -v $HOME/Datasets/NTU_RGBD60_processed:/workspace/MS-G3D/data \
+#   -v $HOME/work_dir/msg3d:/workspace/work_dir \
+#   skeleton-lab:msg3d
+#
+# Inside the container:
+# /workspace/MS-G3D# python main.py --config config/nturgbd-cross-subject/train_joint.yaml --work-dir work_dir/ntu60/xsub/msg3d_joint --device 0 --half
+#
+#
+# ============================================================
+# Skeleton Action Lab: MS-G3D
+# ============================================================
+
+# Base: PyTorch 2.3 with CUDA 12.1 and cuDNN8 (Ubuntu 22.04 compatible)
+FROM pytorch/pytorch:2.3.0-cuda12.1-cudnn8-runtime
+
+# Avoid interactive apt prompts
+ENV DEBIAN_FRONTEND=noninteractive \
+    TZ=Etc/UTC \
+    PYTHONUNBUFFERED=1
+
+# ------------------------------------------------------------------
+# System dependencies
+# ------------------------------------------------------------------
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    wget \
+    vim \
+    ffmpeg \
+    ca-certificates \
+    build-essential \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+
+# ------------------------------------------------------------------
+# Clone MS-G3D (skeleton-based action recognition, CVPR 2020)
+# ------------------------------------------------------------------
+RUN git clone https://github.com/kenziyuliu/MS-G3D.git
+
+# ------------------------------------------------------------------
+# Python deps (keep torch from base image)
+# - Use headless OpenCV to reduce image size
+# - Pin numpy conservatively to avoid old code edge cases
+# ------------------------------------------------------------------
+RUN pip install --no-cache-dir \
+    yacs \
+    tqdm \
+    tensorboard \
+    tensorboardX \
+    "numpy<2.0" \
+    scipy \
+    matplotlib \
+    opencv-python-headless \
+    pillow \
+    scikit-learn \
+    scikit-image \
+    tabulate \
+    thop \
+    fvcore \
+    iopath \
+    pyyaml \
+    "onnx>=1.12" \
+    easydict
+
+# ------------------------------------------------------------------
+# Patch MS-G3D for modern PyYAML defaults (>=5.1 requires Loader)
+# ------------------------------------------------------------------
+RUN sed -i "s/yaml.load(f)/yaml.load(f, Loader=yaml.FullLoader)/" /workspace/MS-G3D/main.py
+
+# (Optional) expose repo root for imports when running outside the repo dir
+ENV PYTHONPATH=/workspace/MS-G3D:${PYTHONPATH}
+
+# Create data/work dirs (data is usually bind-mounted)
+RUN mkdir -p \
+    /workspace/MS-G3D/data \
+    /workspace/data/nturgbd_raw \
+    /workspace/work_dir
+
+# Default working directory inside the container
+WORKDIR /workspace/MS-G3D
+
+# Default command: open a shell
+CMD ["/bin/bash"]
