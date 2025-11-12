@@ -4,8 +4,8 @@
 # To run a container:
 # docker run -it --rm --gpus all --shm-size=8g \
 # --mount type=bind,source="$HOME/Datasets/NTU_RGBD60/nturgb+d_skeletons",target=/workspace/data/nturgbd_raw/nturgb+d_skeletons \
-# --mount type=bind,source="$HOME/Datasets/NTU_RGBD60/NTU_RGBD_samples_with_missing_skeletons.txt
-",target=/workspace/data/nturgbd_raw/NTU_RGBD_samples_with_missing_skeletons.txt:ro \
+# --mount type=bind,source="$HOME/Datasets/NTU_RGBD60/NTU_RGBD_samples_with_missing_skeletons.txt",
+#  target=/workspace/data/nturgbd_raw/NTU_RGBD_samples_with_missing_skeletons.txt:ro \
 # --mount type=bind,source="$HOME/Datasets/NTU_RGBD60_processed",target=/workspace/MS-G3D/data \
 # --mount type=bind,source="$HOME/work_dir/msg3d",target=/workspace/work_dir \
 #   msg3d
