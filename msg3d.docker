@@ -39,6 +39,26 @@ WORKDIR /workspace
 # ------------------------------------------------------------------
 RUN git clone https://github.com/kenziyuliu/MS-G3D.git
 
+# ------------------------------------------------------------------
+# Python dependencies (keep torch from base image)
+# ------------------------------------------------------------------
+RUN pip install --no-cache-dir \
+    yacs \
+    easydict \
+    tqdm \
+    tensorboard \
+    tensorboardX \
+    "numpy<2.0" \
+    scipy \
+    matplotlib \
+    opencv-python-headless \
+    pillow \
+    scikit-image \
+    tabulate \
+    pyyaml \
+    h5py \
+    onnx
+
 # (Optional) expose repo root for imports when running outside the repo dir
 ENV PYTHONPATH=/workspace/MS-G3D:${PYTHONPATH}
 
