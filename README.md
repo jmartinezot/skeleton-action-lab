@@ -1,5 +1,8 @@
 # Skeleton Action Lab 🧠
 
+> ⚠️ **Heads-up:** this repository is under active, heavy development. APIs, scripts, and
+> training recipes are likely to change without notice and may occasionally break.
+
 This repository provides a **Dockerized research environment** for experimenting with
 **skeleton-based action recognition** on the NTU RGB+D 60 dataset. Each model ships with its
 own Dockerfile so you can build lean, model-specific images. For example, `ctrgcn.docker`
@@ -26,8 +29,7 @@ It is also a starting point for research on:
 
 ## ✨ Features
 
-- 🐳 **Docker-based**: reproducible experiments in a single container  
-- ⚙️ **NVIDIA Apex** preinstalled for mixed-precision training (saves VRAM, speeds up training)  
+- 🐳 **Docker-based**: reproducible experiments in a single container
 - 🧠 **Model-specific Dockerfiles** (build only what you need):
   - `ctrgcn.docker` – builds an image tailored for CTR-GCN experiments with preprocessed `.npz` tensors
   - `msg3d.docker` – installs the MS-G3D pipeline (data generation + training) without CTR-GCN extras
@@ -44,9 +46,38 @@ It is also a starting point for research on:
 | **PyTorch**    | Deep learning framework                           |
 | **MS-G3D**     | Multi-scale ST-GCN for skeleton action recognition |
 | **CTR-GCN**    | GCN with channel-wise topology refinement         |
-| **NVIDIA Apex**| Mixed precision + fused ops for efficient training|
 | **NTU RGB+D 60** | Benchmark dataset for 3D human actions          |
 | **Docker**     | Containerized environment                         |
+
+---
+
+## 📦 Data Preparation
+
+The experiments expect the NTU RGB+D 60 dataset to live outside the container in a host
+directory named `Datasets`. Within that folder, keep a dedicated `NTU60_npz` subdirectory
+that stores both the original Kaggle archive and any converted formats used by the
+pipelines:
+
+```
+~/Datasets/
+└── NTU60_npz/
+    ├── NTU60_CS.npz.zip          # Original download from Kaggle
+    ├── NTU60_CS.npz              # Unzipped Kaggle format (N, T=300, D=150)
+    ├── NTU60_CS_ctrgcn.npz       # Output of convert_ntu60_kaggle_to_ctrgcn.py
+    ├── msg3d/                    # Optional MS-G3D preprocessed data (if generated)
+    └── other_formats/...         # Any future conversions you rely on
+```
+
+Helpful scripts for inspecting and converting the dataset:
+
+- `dataset_tools/inspect_npz.py` – dump keys, shapes, and dtypes in an `.npz` file.
+- `convert_ntu60_kaggle_to_ctrgcn.py` – convert Kaggle layout to CTR-GCN layout.
+- `convert_ctr_npz_to_msg3d.py` – bridge from CTR-GCN `.npz` tensors to the MS-G3D
+  preprocessing pipeline.
+
+When launching containers, bind-mount `~/Datasets/NTU60_npz` into the expected path inside
+the container (see the `docker run` examples below). Keeping all derived formats together
+makes it easy to reuse conversions across experiments.
 
 ---
 
@@ -97,7 +128,7 @@ Dockerfile can add them to `/workspace/` inside the container:
 | Script | Purpose |
 |--------|---------|
 | `check_gpu.py` | Prints CUDA availability, device count, device name, and the PyTorch/CUDA versions so you can confirm the container sees your GPU. |
-| `inspect_npz.py` | Dumps the keys, shapes, and dtypes in an NTU60 `.npz` archive (defaults to `/workspace/CTR-GCN/data/ntu/NTU60_CS.npz`) to verify downloads and mounts. |
+| `dataset_tools/inspect_npz.py` | Dumps the keys, shapes, and dtypes in an NTU60 `.npz` archive (defaults to `/workspace/CTR-GCN/data/ntu/NTU60_CS.npz`) to verify downloads and mounts. |
 | `convert_ntu60_kaggle_to_ctrgcn.py` | Converts the Kaggle-style `NTU60_CS.npz` (`(N, T, D=150)` with one-hot labels) into the `(N, C, T, V, M)` layout used by CTR-GCN and saves `NTU60_CS_ctrgcn.npz`. |
 | `skeleton_dataset_ctrgcn.py` | Defines a PyTorch `Dataset` for the converted skeleton tensors, optionally dropping the second person stream, and includes a loader sanity check. |
 | `train_npz_mlp.py` | Runs a lightweight MLP baseline directly on the Kaggle `.npz` file to stress-test your GPU/VRAM and confirm the data loads. |
@@ -158,6 +189,13 @@ python main.py \
 ### 🧩 Notes
 
 - --gpus all enables CUDA inside the container (requires nvidia-container-toolkit).
+
+---
+
+## 🔭 Future Work
+
+- Reintroduce **NVIDIA Apex** for mixed-precision training once the training stacks stabilize.
+- Expand the data tooling to cover more skeleton benchmarks beyond NTU RGB+D 60.
 
 - Adjust all /home/user/... paths to match your own directories.
 
