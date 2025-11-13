@@ -220,6 +220,24 @@ def get_parser():
         type=str2bool,
         default=False,
         help='Debug mode; default false')
+    # ---- Memory / sequence length overrides ----
+    parser.add_argument(
+        '--train-window-size',
+        type=int,
+        default=None,
+        help='Override train_feeder_args.window_size (temporal length).'
+    )
+    parser.add_argument(
+        '--test-window-size',
+        type=int,
+        default=None,
+        help='Override test_feeder_args.window_size.'
+    )
+    parser.add_argument(
+        '--memory-friendly',
+        action='store_true',
+        help='Apply a memory-friendly preset (smaller batch/window/workers).'
+    )
 
     return parser
 
@@ -687,22 +705,56 @@ def str2bool(v):
 def main():
     parser = get_parser()
 
-    # load arg form config file
+    # first parse to get CLI and config path
     p = parser.parse_args()
+
     if p.config is not None:
         with open(p.config, 'r') as f:
             default_arg = yaml.load(f, Loader=yaml.FullLoader)
+
         key = vars(p).keys()
         for k in default_arg.keys():
             if k not in key:
                 print('WRONG ARG:', k)
                 assert (k in key)
+
+        # --------- apply memory-related overrides to the config dict ----------
+        # 1) optional window size overrides
+        if p.train_window_size is not None:
+            default_arg.setdefault('train_feeder_args', {})
+            default_arg['train_feeder_args']['window_size'] = p.train_window_size
+
+        if p.test_window_size is not None:
+            default_arg.setdefault('test_feeder_args', {})
+            default_arg['test_feeder_args']['window_size'] = p.test_window_size
+
+        # 2) optional "memory friendly" preset
+        if p.memory_friendly:
+            # these are *defaults* and can still be overridden by explicit CLI flags
+            default_arg['batch_size'] = 16
+            default_arg['test_batch_size'] = 16
+            default_arg['forward_batch_size'] = 8
+            default_arg['num_worker'] = 4
+
+            default_arg.setdefault('train_feeder_args', {})
+            tfa = default_arg['train_feeder_args']
+            tfa['window_size'] = tfa.get('window_size', 64)
+            tfa['random_choose'] = True
+            tfa['random_shift'] = True
+
+            default_arg.setdefault('test_feeder_args', {})
+            vfa = default_arg['test_feeder_args']
+            vfa['window_size'] = vfa.get('window_size', 64)
+
+        # push updated defaults back into the parser
         parser.set_defaults(**default_arg)
 
+    # final parse: config defaults + CLI overrides
     arg = parser.parse_args()
     init_seed(arg.seed)
     processor = Processor(arg)
     processor.start()
+
 
 
 if __name__ == '__main__':
