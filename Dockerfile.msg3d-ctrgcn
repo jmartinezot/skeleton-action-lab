@@ -2,7 +2,7 @@
 # docker build -f Dockerfile.msg3d-ctrgcn -t skeleton-lab .
 # 
 # To run a container:
-# docker run -it --rm --gpus all --mount type=bind,source="$HOME/Datasets/NTU60_npz",target=/workspace/CTR-GCN/data/ntu --mount type=bind,source="$HOME/work_dir/msg3d-apex",target=/workspace/work_dir skeleton-lab:latest
+# docker run -it --rm --gpus all --mount type=bind,source="$HOME/Datasets/NTU60/ctrgcn",target=/workspace/CTR-GCN/data/ntu --mount type=bind,source="$HOME/work_dir/msg3d-apex",target=/workspace/work_dir skeleton-lab:latest
 #
 # ============================================================
 # Skeleton Action Lab: MS-G3D + CTR-GCN + NVIDIA Apex
