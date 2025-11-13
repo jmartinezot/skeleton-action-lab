@@ -54,19 +54,30 @@ It is also a starting point for research on:
 ## 📦 Data Preparation
 
 The experiments expect the NTU RGB+D 60 dataset to live outside the container in a host
-directory named `Datasets`. Within that folder, keep a dedicated `NTU60_npz` subdirectory
-that stores both the original Kaggle archive and any converted formats used by the
-pipelines:
+directory named `Datasets`. Within that folder, organize the raw download and all
+preprocessed variants in an `NTU60` directory so each model can reuse the same source
+files:
 
 ```
-~/Datasets/
-└── NTU60_npz/
-    ├── NTU60_CS.npz.zip          # Original download from Kaggle
-    ├── NTU60_CS.npz              # Unzipped Kaggle format (N, T=300, D=150)
-    ├── NTU60_CS_ctrgcn.npz       # Output of convert_ntu60_kaggle_to_ctrgcn.py
-    ├── msg3d/                    # Optional MS-G3D preprocessed data (if generated)
-    └── other_formats/...         # Any future conversions you rely on
+Datasets/
+└── NTU60/
+    ├── kaggle_raw/
+    │   └── NTU60_CS.npz
+    ├── skeleton5d/
+    │   └── NTU60_CS_skeleton5d.npz
+    ├── msg3d/
+    │   └── xsub/
+    │       ├── train_data_joint.npy
+    │       ├── train_label.pkl
+    │       ├── val_data_joint.npy
+    │       └── val_label.pkl
+    └── ctrgcn/
+        └── NTU60_CS.npz   (link to kaggle raw)
 ```
+
+> **Tip:** the `ctrgcn/NTU60_CS.npz` entry can simply be a symbolic link back to the
+> `kaggle_raw/NTU60_CS.npz` file so you avoid storing duplicates while keeping each model's
+> expected file layout intact.
 
 Helpful scripts for inspecting and converting the dataset:
 
@@ -75,7 +86,7 @@ Helpful scripts for inspecting and converting the dataset:
 - `convert_ctr_npz_to_msg3d.py` – bridge from CTR-GCN `.npz` tensors to the MS-G3D
   preprocessing pipeline.
 
-When launching containers, bind-mount `~/Datasets/NTU60_npz` into the expected path inside
+When launching containers, bind-mount `~/Datasets/NTU60` into the expected path inside
 the container (see the `docker run` examples below). Keeping all derived formats together
 makes it easy to reuse conversions across experiments.
 
@@ -86,8 +97,8 @@ makes it easy to reuse conversions across experiments.
 1. Place your `NTU60_CS.npz` in a folder on the host, e.g.:
 
    ```bash
-   mkdir -p /home/bob/Datasets/NTU60_npz
-   cp NTU60_CS.npz /home/bob/Datasets/NTU60_npz/
+   mkdir -p /home/bob/Datasets/NTU60/kaggle_raw
+   cp NTU60_CS.npz /home/bob/Datasets/NTU60/kaggle_raw/
    
 ---
 
@@ -143,7 +154,7 @@ Mount your dataset and work directory from the host:
 ```bash
 docker run -it --rm --gpus all \
   --shm-size=8g \
-  --mount type=bind,source="$HOME/Datasets/NTU60_npz",target=/workspace/CTR-GCN/data/ntu \
+  --mount type=bind,source="$HOME/Datasets/NTU60/ctrgcn",target=/workspace/CTR-GCN/data/ntu \
   skeleton-lab:ctrgcn
 ```
 

@@ -2,7 +2,7 @@
 # docker build -f ctrgcn.docker -t ctrgcn .
 # 
 # To run a container:
-# docker run -it --rm --gpus all --shm-size=8g --mount type=bind,source="$HOME/Datasets/NTU60_npz",target=/workspace/CTR-GCN/data/ntu ctrgcn
+# docker run -it --rm --gpus all --shm-size=8g --mount type=bind,source="$HOME/Datasets/NTU60/ctrgcn",target=/workspace/CTR-GCN/data/ntu ctrgcn
 # 
 # Inside the container:
 # /workspace/CTR-GCN# python main.py --config ./config/nturgbd-cross-subject/default.yaml --work-dir ../work_dir/ctrgcn_ntu60_xsub_joint
