@@ -231,6 +231,59 @@ python3 main.py \
   --work-dir ../work_dir/ctrgcn_ntu60_xsub_joint
 ```
 
+## 🚀 Quick Start (MS-G3D with converted `.npz`)
+
+The MS-G3D source lives in the [`MS-G3D/`](MS-G3D) directory of this repository and
+ships in the `skeleton-lab:msg3d` image. If you already have the Kaggle
+`NTU60_CS.npz` archive on disk, you can repurpose it for MS-G3D by converting the
+CTR-GCN-style tensor into MS-G3D's `xsub` layout.
+
+1. Reuse the CTR-GCN conversion from above (or symlink it) so the file lives at:
+
+   ```text
+   /home/bob/Datasets/NTU60/msg3d/NTU60_CS.npz
+   ```
+
+   (This path is arbitrary—just keep it consistent with the mount below.)
+
+2. Build the MS-G3D Docker image:
+
+   ```bash
+   docker build -t skeleton-lab:msg3d -f msg3d.docker .
+   ```
+
+3. Start the container with your dataset and a writable work directory mounted:
+
+   ```bash
+   docker run -it --rm --gpus all \
+     --mount type=bind,source="/home/bob/Datasets/NTU60/msg3d",target=/workspace/MS-G3D/data/ntu \
+     --mount type=bind,source="/home/bob/MS-G3D_workdir",target=/workspace/work_dir \
+     skeleton-lab:msg3d
+   ```
+
+4. Inside the container, generate the MS-G3D training/validation tensors from the
+   CTR-GCN `.npz` file (writes to `/workspace/MS-G3D/data/ntu/xsub/`):
+
+   ```bash
+   cd /workspace
+   python3 convert_ctr_npz_to_msg3d.py
+   ```
+
+5. Launch MS-G3D training on the cross-subject split:
+
+   ```bash
+   cd /workspace/MS-G3D
+   python3 main.py \
+     --config config/nturgbd-cross-subject/train_joint.yaml \
+     --work-dir /workspace/work_dir/ntu60_xsub_msg3d_joint \
+     --device 0 \
+     --half
+   ```
+
+This workflow keeps all MS-G3D assets inside the `/workspace/MS-G3D` tree while
+demonstrating that the full training stack (code + configs + data conversion)
+already ships with the repo.
+
 ### 🧪 Run the container (MS-G3D with raw .skeleton files)
 
 If you later download the original NTU RGB+D 60 skeletons:
