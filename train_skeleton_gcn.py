@@ -1,5 +1,6 @@
 # train_skeleton_gcn.py
 from pathlib import Path
+import argparse
 
 import torch
 import torch.nn as nn
@@ -10,8 +11,24 @@ from skeleton_dataset_ctrgcn import NTU60SkeletonDataset
 from stgcn_backbone import STGCNBackbone
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Train ST-GCN sanity check on CTR-GCN npz tensors")
+    parser.add_argument(
+        "--npz-path",
+        type=str,
+        default="/workspace/CTR-GCN/data/ntu/NTU60_CS_ctrgcn.npz",
+        help="Path to the CTR-GCN-style NTU60 .npz file",
+    )
+    return parser.parse_args()
+
+
 def main():
-    npz_path = Path("/workspace/CTR-GCN/data/ntu/NTU60_CS_ctrgcn.npz")
+    args = parse_args()
+    npz_path = Path(args.npz_path)
+
+    if not npz_path.exists():
+        raise FileNotFoundError(f"Input npz file not found: {npz_path}")
+
     ds = NTU60SkeletonDataset(npz_path, split="train", use_both_persons=True)
     loader = DataLoader(ds, batch_size=16, shuffle=True, num_workers=4, pin_memory=True)
 
@@ -20,6 +37,7 @@ def main():
 
     print("Using device:", device)
     print("Mixed precision (AMP) enabled:", use_amp)
+    print("Dataset path:", npz_path)
 
     model = STGCNBackbone(num_classes=60, in_channels=3, num_joints=25).to(device)
     optim = torch.optim.Adam(model.parameters(), lr=1e-3)
@@ -58,4 +76,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
