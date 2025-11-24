@@ -1,21 +1,16 @@
 """Benchmark and smoke-test the available skeleton models.
 
-Two entry points are provided:
-- CLI mode: run quick synthetic-training loops for one or more models and
-  report wall-clock timings.
-- GUI mode: launch a small Tkinter dashboard to pick parameters and
-  models interactively.
-
-The goal is to answer: "Can this environment run the models, and how long
-might it take to scale up to bigger runs?" The benchmarks intentionally use
-synthetic data so they can execute without the NTU60 dataset mounted.
+Run quick synthetic-training loops for one or more models and report
+wall-clock timings. The goal is to answer: "Can this environment run the
+models, and how long might it take to scale up to bigger runs?" The
+benchmarks intentionally use synthetic data so they can execute without the
+NTU60 dataset mounted.
 """
 from __future__ import annotations
 
 import argparse
 import dataclasses
 import sys
-import threading
 import time
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Optional
@@ -30,7 +25,7 @@ class BenchmarkResult:
     name: str
     success: bool
     seconds: float
-    iterations: int
+    steps: int
     batch_size: int
     seq_len: int
     device: str
@@ -40,7 +35,7 @@ class BenchmarkResult:
     def as_row(self) -> str:
         status = "✅" if self.success else "❌"
         return (
-            f"{status} {self.name}: {self.iterations} iters, "
+            f"{status} {self.name}: {self.steps} steps, "
             f"batch={self.batch_size}, T={self.seq_len}, device={self.device}, "
             f"amp={self.amp} -> {self.seconds:.2f}s {self.message}".strip()
         )
@@ -72,7 +67,7 @@ def run_ctrgcn(args: argparse.Namespace) -> BenchmarkResult:
             name="CTR-GCN",
             success=False,
             seconds=0.0,
-            iterations=args.iterations,
+            steps=args.steps,
             batch_size=args.batch_size,
             seq_len=args.seq_len,
             device=str(device),
@@ -94,7 +89,7 @@ def run_ctrgcn(args: argparse.Namespace) -> BenchmarkResult:
             name="CTR-GCN",
             success=False,
             seconds=0.0,
-            iterations=args.iterations,
+            steps=args.steps,
             batch_size=args.batch_size,
             seq_len=args.seq_len,
             device=str(device),
@@ -118,7 +113,7 @@ def run_ctrgcn(args: argparse.Namespace) -> BenchmarkResult:
     criterion = nn.CrossEntropyLoss()
     scaler = GradScaler(enabled=use_amp)
 
-    iterations = args.iterations
+    iterations = args.steps
     batch_size = args.batch_size
     seq_len = args.seq_len
 
@@ -140,7 +135,7 @@ def run_ctrgcn(args: argparse.Namespace) -> BenchmarkResult:
             name="CTR-GCN",
             success=False,
             seconds=duration,
-            iterations=iterations,
+            steps=iterations,
             batch_size=batch_size,
             seq_len=seq_len,
             device=str(device),
@@ -153,7 +148,7 @@ def run_ctrgcn(args: argparse.Namespace) -> BenchmarkResult:
         name="CTR-GCN",
         success=True,
         seconds=duration,
-        iterations=iterations,
+        steps=iterations,
         batch_size=batch_size,
         seq_len=seq_len,
         device=str(device),
@@ -178,7 +173,7 @@ def run_simple_stgcn(args: argparse.Namespace) -> BenchmarkResult:
     criterion = nn.CrossEntropyLoss()
     scaler = GradScaler(enabled=use_amp)
 
-    iterations = args.iterations
+    iterations = args.steps
     batch_size = args.batch_size
     seq_len = args.seq_len
 
@@ -201,7 +196,7 @@ def run_simple_stgcn(args: argparse.Namespace) -> BenchmarkResult:
             name="SimpleSTBackbone",
             success=False,
             seconds=duration,
-            iterations=iterations,
+            steps=iterations,
             batch_size=batch_size,
             seq_len=seq_len,
             device=str(device),
@@ -214,7 +209,7 @@ def run_simple_stgcn(args: argparse.Namespace) -> BenchmarkResult:
         name="SimpleSTBackbone",
         success=True,
         seconds=duration,
-        iterations=iterations,
+        steps=iterations,
         batch_size=batch_size,
         seq_len=seq_len,
         device=str(device),
@@ -249,90 +244,6 @@ def summarize_results(results: Iterable[BenchmarkResult]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# GUI
-# ---------------------------------------------------------------------------
-
-def launch_gui(args: argparse.Namespace, tasks: Dict[str, BenchmarkTask]) -> None:
-    import tkinter as tk
-    from tkinter import messagebox, scrolledtext, ttk
-
-    root = tk.Tk()
-    root.title("Skeleton Action Lab Benchmarks")
-
-    param_frame = ttk.LabelFrame(root, text="Parameters")
-    param_frame.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
-
-    ttk.Label(param_frame, text="Batch size").grid(row=0, column=0, sticky="w")
-    batch_var = tk.IntVar(value=args.batch_size)
-    ttk.Entry(param_frame, textvariable=batch_var, width=10).grid(row=0, column=1, padx=5)
-
-    ttk.Label(param_frame, text="Sequence length (T)").grid(row=1, column=0, sticky="w")
-    seq_var = tk.IntVar(value=args.seq_len)
-    ttk.Entry(param_frame, textvariable=seq_var, width=10).grid(row=1, column=1, padx=5)
-
-    ttk.Label(param_frame, text="Iterations").grid(row=2, column=0, sticky="w")
-    iter_var = tk.IntVar(value=args.iterations)
-    ttk.Entry(param_frame, textvariable=iter_var, width=10).grid(row=2, column=1, padx=5)
-
-    device_var = tk.StringVar(value=args.device or ("cuda" if torch.cuda.is_available() else "cpu"))
-    ttk.Label(param_frame, text="Device").grid(row=3, column=0, sticky="w")
-    ttk.Combobox(param_frame, textvariable=device_var, values=["cuda", "cpu"], width=7).grid(row=3, column=1, padx=5)
-
-    amp_var = tk.BooleanVar(value=args.amp)
-    ttk.Checkbutton(param_frame, text="Enable AMP (CUDA only)", variable=amp_var).grid(row=4, column=0, columnspan=2, sticky="w")
-
-    model_frame = ttk.LabelFrame(root, text="Models")
-    model_frame.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
-
-    model_vars: Dict[str, tk.BooleanVar] = {}
-    for idx, (key, task) in enumerate(tasks.items()):
-        var = tk.BooleanVar(value=True)
-        model_vars[key] = var
-        ttk.Checkbutton(model_frame, text=f"{task.name} – {task.description}", variable=var).grid(
-            row=idx, column=0, sticky="w"
-        )
-
-    output = scrolledtext.ScrolledText(root, width=90, height=18, state=tk.DISABLED)
-    output.grid(row=2, column=0, padx=10, pady=10)
-
-    def log(message: str) -> None:
-        output.configure(state=tk.NORMAL)
-        output.insert(tk.END, message + "\n")
-        output.see(tk.END)
-        output.configure(state=tk.DISABLED)
-
-    def run_gui_benchmarks() -> None:
-        selected = [key for key, var in model_vars.items() if var.get()]
-        if not selected:
-            messagebox.showinfo("No models selected", "Pick at least one model to benchmark.")
-            return
-
-        run_args = argparse.Namespace(
-            batch_size=batch_var.get(),
-            seq_len=seq_var.get(),
-            iterations=iter_var.get(),
-            device=device_var.get(),
-            amp=amp_var.get(),
-        )
-
-        def worker() -> None:
-            log("Starting benchmarks...\n")
-            results: List[BenchmarkResult] = []
-            for key in selected:
-                res = tasks[key](run_args)
-                results.append(res)
-                log(res.as_row())
-            log("\n" + summarize_results(results))
-
-        threading.Thread(target=worker, daemon=True).start()
-
-    run_button = ttk.Button(root, text="Run Benchmarks", command=run_gui_benchmarks)
-    run_button.grid(row=3, column=0, padx=10, pady=10, sticky="e")
-
-    root.mainloop()
-
-
-# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -347,20 +258,15 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     )
     parser.add_argument("--batch-size", type=int, default=2, help="Batch size for synthetic inputs")
     parser.add_argument("--seq-len", type=int, default=50, help="Sequence length (T) for synthetic inputs")
-    parser.add_argument("--iterations", type=int, default=3, help="Number of optimizer steps to run")
+    parser.add_argument("--steps", type=int, default=3, help="Number of optimizer steps to run")
     parser.add_argument("--device", choices=["cpu", "cuda"], default=None, help="Force a device (defaults to auto)")
-    parser.add_argument("--amp", action=argparse.BooleanOptionalAction, default=True, help="Enable AMP when CUDA is available")
-    parser.add_argument("--gui", action="store_true", help="Launch the Tkinter GUI instead of CLI mode")
+    parser.add_argument("--amp", action=argparse.BooleanOptionalAction, default=False, help="Enable AMP when CUDA is available")
     return parser.parse_args(argv)
 
 
 def main(argv: Optional[List[str]] = None) -> None:
     args = parse_args(argv)
     tasks = available_tasks()
-
-    if args.gui:
-        launch_gui(args, tasks)
-        return
 
     results: List[BenchmarkResult] = []
     for key in args.models:
