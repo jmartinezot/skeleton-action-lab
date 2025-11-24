@@ -33,7 +33,6 @@ It is also a starting point for research on:
 - 🧠 **Model-specific Dockerfiles** (build only what you need):
   - `ctrgcn.docker` – builds an image tailored for CTR-GCN experiments with preprocessed `.npz` tensors
   - `msg3d.docker` – installs the MS-G3D pipeline (data generation + training) without CTR-GCN extras
-  - `Dockerfile.msg3d-ctrgcn` – optional legacy combo image kept for cross-checking multi-model workflows
   - Add new Dockerfiles (e.g., `stgcn.docker`, `mim.docker`) as more models are integrated
 - 🧱 Built on **PyTorch 2.3 + CUDA 12.1** runtime
 
@@ -57,6 +56,9 @@ The experiments expect the NTU RGB+D 60 dataset to live outside the container in
 directory named `Datasets`. Within that folder, organize the raw download and all
 preprocessed variants in an `NTU60` directory so each model can reuse the same source
 files:
+
+You can download the `NTU60_CS.npz` archive from Kaggle here:
+https://www.kaggle.com/datasets/jarex616/ntu-rgb-d-60-skeleton-data-npz.
 
 ```
 Datasets/
@@ -94,12 +96,39 @@ makes it easy to reuse conversions across experiments.
 
 ## 🚀 Quick Start (CTR-GCN with `.npz`)
 
-1. Place your `NTU60_CS.npz` in a folder on the host, e.g.:
+1. Download the Kaggle archive and place `NTU60_CS.npz` in a folder on the host, e.g.:
 
    ```bash
    mkdir -p /home/bob/Datasets/NTU60/kaggle_raw
    cp NTU60_CS.npz /home/bob/Datasets/NTU60/kaggle_raw/
-   
+   ```
+
+2. Convert the Kaggle layout to the CTR-GCN layout (runs on CPU, fast):
+
+   ```bash
+   python convert_ntu60_kaggle_to_ctrgcn.py \
+     --input /home/bob/Datasets/NTU60/kaggle_raw/NTU60_CS.npz \
+     --output /home/bob/Datasets/NTU60/ctrgcn/NTU60_CS.npz
+   ```
+
+3. Build the CTR-GCN image and start a container with your converted file mounted:
+
+   ```bash
+   docker build -t skeleton-lab:ctrgcn -f ctrgcn.docker .
+   docker run -it --rm --gpus all \
+     --mount type=bind,source="/home/bob/Datasets/NTU60/ctrgcn",target=/workspace/CTR-GCN/data/ntu \
+     skeleton-lab:ctrgcn
+   ```
+
+4. Inside the container, launch training:
+
+   ```bash
+   cd /workspace/CTR-GCN
+   python main.py \
+     --config ./config/nturgbd-cross-subject/default.yaml \
+     --work-dir ../work_dir/ctrgcn_ntu60_xsub_joint
+   ```
+
 ---
 
 ## 🐳 Build and Run the Docker Environments
@@ -107,9 +136,7 @@ makes it easy to reuse conversions across experiments.
 Pick the Dockerfile that matches the model you want to explore. Each Dockerfile lives at the
 repository root and builds a self-contained environment for that model. For example,
 [`ctrgcn.docker`](ctrgcn.docker) installs only the CTR-GCN stack and
-[`msg3d.docker`](msg3d.docker) focuses solely on MS-G3D, while
-[`Dockerfile.msg3d-ctrgcn`](Dockerfile.msg3d-ctrgcn) remains available if you still need the
-combined setup.
+[`msg3d.docker`](msg3d.docker) focuses solely on MS-G3D.
 
 ### 🧱 Build the image
 
@@ -122,8 +149,6 @@ docker build -t skeleton-lab:ctrgcn -f ctrgcn.docker .
 # Build the MS-G3D-only image
 docker build -t skeleton-lab:msg3d -f msg3d.docker .
 
-# (Optional) build the combined MS-G3D + CTR-GCN image for comparison
-docker build -t skeleton-lab:msg3d-ctrgcn -f Dockerfile.msg3d-ctrgcn .
 ```
 
 Add more build commands as you introduce Dockerfiles for new models. Each build downloads the
@@ -145,6 +170,36 @@ Dockerfile can add them to `/workspace/` inside the container:
 | `train_npz_mlp.py` | Runs a lightweight MLP baseline directly on the Kaggle `.npz` file to stress-test your GPU/VRAM and confirm the data loads. |
 | `train_skeleton_gcn.py` | Trains a toy spatio-temporal baseline built on `skeleton_dataset_ctrgcn.py` to validate the end-to-end skeleton pipeline. |
 | `benchmark_models.py` | Runs quick synthetic training loops for the bundled models to confirm imports/device setup and measure wall-clock timing. Offers both CLI and Tkinter GUI modes. |
+
+### 🔧 Script usage examples
+
+Run these commands inside a container (paths assume the `ctrgcn` image and the mount shown above):
+
+```bash
+# Confirm the GPU and PyTorch installation
+python check_gpu.py
+
+# Peek at the contents of a Kaggle-style npz
+python dataset_tools/inspect_npz.py --path /workspace/CTR-GCN/data/ntu/NTU60_CS.npz
+
+# Convert Kaggle layout to CTR-GCN layout
+python convert_ntu60_kaggle_to_ctrgcn.py \
+  --input /workspace/CTR-GCN/data/ntu/NTU60_CS.npz \
+  --output /workspace/CTR-GCN/data/ntu/NTU60_CS_ctrgcn.npz
+
+# Train a quick MLP sanity check on the Kaggle file
+python train_npz_mlp.py \
+  --npz-path /workspace/CTR-GCN/data/ntu/NTU60_CS.npz \
+  --epochs 5 --batch-size 256 --device cuda:0
+
+# Train the toy GCN baseline on the converted file
+python train_skeleton_gcn.py \
+  --npz-path /workspace/CTR-GCN/data/ntu/NTU60_CS_ctrgcn.npz \
+  --epochs 5 --batch-size 32 --device cuda:0
+
+# Run synthetic benchmarks for quick timing checks
+python benchmark_models.py --model ctrgcn --steps 50 --device cuda:0
+```
 
 Feel free to run any of these scripts inside the container (e.g., `python check_gpu.py`).
 
