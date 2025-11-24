@@ -12,7 +12,7 @@ Assumptions:
 - y is stored as (N, num_classes) one-hot
 
 Output:
-- NTU60_CS_ctrgcn.npz in the same directory as the input.
+- NTU60_CS_skel_5d.npz in the same directory as the input.
 """
 
 import numpy as np
@@ -87,7 +87,7 @@ def main():
     print("New y_train:", y_train_idx.shape, y_train_idx.dtype)
     print("New y_test: ", y_test_idx.shape, y_test_idx.dtype)
 
-    out_path = in_path.with_name("NTU60_CS_ctrgcn.npz")
+    out_path = in_path.with_name("NTU60_CS_skel_5d.npz")
     print(f"\nSaving converted data to {out_path} ...")
     np.savez_compressed(
         out_path,
