@@ -10,6 +10,17 @@ builds a container with the CTR-GCN dependencies and `msg3d.docker` provisions t
 MS-G3D toolchain, while additional Dockerfiles can be added alongside them for other
 backbones.
 
+## 🧭 Table of Contents
+
+- [Features](#-features)
+- [Stack Overview](#-stack-overview)
+- [Data Preparation](#-data-preparation)
+- [Quick Start (CTR-GCN with `.npz`)](#-quick-start-ctrgcn-with-npz)
+- [Build and Run the Docker Environments](#-build-and-run-the-docker-environments)
+- [Quick Start (MS-G3D with converted `.npz`)](#-quick-start-ms-g3d-with-converted-npz)
+- [Run the container (MS-G3D with raw .skeleton files)](#-run-the-container-ms-g3d-with-raw-skeleton-files)
+- [Future Work](#-future-work)
+
 Currently included models:
 
 - **MS-G3D** (Multi-Scale Graph 3D Network, CVPR 2020) – classic multi-scale ST-GCN backbone
@@ -99,16 +110,16 @@ makes it easy to reuse conversions across experiments.
 1. Download the Kaggle archive and place `NTU60_CS.npz` in a folder on the host, e.g.:
 
    ```bash
-   mkdir -p /home/bob/Datasets/NTU60/kaggle_raw
-   cp NTU60_CS.npz /home/bob/Datasets/NTU60/kaggle_raw/
+   mkdir -p "$HOME/Datasets/NTU60/kaggle_raw"
+   cp NTU60_CS.npz "$HOME/Datasets/NTU60/kaggle_raw/"
    ```
 
 2. Convert the Kaggle layout to the CTR-GCN layout (runs on CPU, fast):
 
    ```bash
    python3 convert_ntu60_kaggle_to_ctrgcn.py \
-     --input /home/bob/Datasets/NTU60/kaggle_raw/NTU60_CS.npz \
-     --output /home/bob/Datasets/NTU60/ctrgcn/NTU60_CS.npz
+     --input "$HOME/Datasets/NTU60/kaggle_raw/NTU60_CS.npz" \
+     --output "$HOME/Datasets/NTU60/ctrgcn/NTU60_CS.npz"
    ```
 
 3. Build the CTR-GCN image and start a container with your converted file mounted:
@@ -116,7 +127,7 @@ makes it easy to reuse conversions across experiments.
    ```bash
    docker build -t skeleton-lab:ctrgcn -f ctrgcn.docker .
    docker run -it --rm --gpus all \
-     --mount type=bind,source="/home/bob/Datasets/NTU60/ctrgcn",target=/workspace/CTR-GCN/data/ntu \
+     --mount type=bind,source="$HOME/Datasets/NTU60/ctrgcn",target=/workspace/CTR-GCN/data/ntu \
      skeleton-lab:ctrgcn
    ```
 
@@ -241,7 +252,7 @@ CTR-GCN-style tensor into MS-G3D's `xsub` layout.
 1. Reuse the CTR-GCN conversion from above (or symlink it) so the file lives at:
 
    ```text
-   /home/bob/Datasets/NTU60/msg3d/NTU60_CS.npz
+   $HOME/Datasets/NTU60/msg3d/NTU60_CS.npz
    ```
 
    (This path is arbitrary—just keep it consistent with the mount below.)
@@ -256,8 +267,8 @@ CTR-GCN-style tensor into MS-G3D's `xsub` layout.
 
    ```bash
    docker run -it --rm --gpus all \
-     --mount type=bind,source="/home/bob/Datasets/NTU60/msg3d",target=/workspace/MS-G3D/data/ntu \
-     --mount type=bind,source="/home/bob/MS-G3D_workdir",target=/workspace/work_dir \
+     --mount type=bind,source="$HOME/Datasets/NTU60/msg3d",target=/workspace/MS-G3D/data/ntu \
+     --mount type=bind,source="$HOME/MS-G3D_workdir",target=/workspace/work_dir \
      skeleton-lab:msg3d
    ```
 
