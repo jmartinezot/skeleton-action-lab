@@ -171,7 +171,7 @@ Run lightweight sanity checks (inside the same container):
 python3 /workspace/scripts/check_gpu.py
 
 # Inspect Kaggle npz contents
-python3 /workspace/scripts/dataset_tools/inspect_npz.py --path /workspace/CTR-GCN/data/ntu/NTU60_CS.npz
+python3 /workspace/scripts/dataset_tools/inspect_npz.py /workspace/CTR-GCN/data/ntu/NTU60_CS.npz
 
 # Toy baselines
 python3 /workspace/scripts/train_npz_mlp.py --npz-path /workspace/CTR-GCN/data/ntu/NTU60_CS.npz --epochs 5 --batch-size 256 --device cuda:0
