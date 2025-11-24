@@ -114,6 +114,23 @@ python3 convert_ntu60_kaggle_to_ctrgcn.py \
   --output "$HOME/Datasets/NTU60/ctrgcn/NTU60_CS.npz"
 ```
 
+### Convert to skeleton5d layout (for `train_skeleton_gcn.py`)
+
+Some quick-start scripts, such as `train_skeleton_gcn.py`, expect a 5D tensor layout.
+You can generate this format inside the CTR-GCN container using the provided conversion
+utility:
+
+```bash
+docker run -it --rm --gpus all \
+  --shm-size=8g \
+  --mount type=bind,source="$HOME/Datasets/NTU60/",target=/workspace/CTR-GCN/data/ntu \
+  skeleton-lab:ctrgcn
+
+python3 /workspace/scripts/dataset_tools/convert_kaggle_to_skeleton5d.py \
+  --input /workspace/CTR-GCN/data/ntu/ctrgcn/NTU60_CS.npz \
+  --output /workspace/CTR-GCN/data/ntu/skeleton5d/NTU60_CS_skeleton5d.npz
+```
+
 ### Convert CTR-GCN layout to MS-G3D layout
 
 Generate the `xsub` splits for MS-G3D from the CTR-GCN tensor (runs inside or outside a
