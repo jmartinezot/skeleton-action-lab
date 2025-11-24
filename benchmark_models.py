@@ -36,7 +36,7 @@ class BenchmarkResult:
         status = "✅" if self.success else "❌"
         return (
             f"{status} {self.name}: {self.steps} steps, "
-            f"batch={self.batch_size}, T={self.seq_len}, device={self.device}, "
+            f"batch={self.batch_size}, seq_len={self.seq_len}, device={self.device}, "
             f"amp={self.amp} -> {self.seconds:.2f}s {self.message}".strip()
         )
 
@@ -57,7 +57,7 @@ class BenchmarkTask:
 
 def run_ctrgcn(args: argparse.Namespace) -> BenchmarkResult:
     start = time.perf_counter()
-    device = torch.device(args.device if args.device else ("cuda" if torch.cuda.is_available() else "cpu"))
+    device = resolve_device(getattr(args, "device", None))
     use_amp = args.amp and device.type == "cuda"
 
     ctrgcn_root = Path("/workspace/CTR-GCN")
@@ -164,7 +164,7 @@ def run_simple_stgcn(args: argparse.Namespace) -> BenchmarkResult:
     from train_skeleton_gcn_simple_backbone import SimpleSTBackbone
 
     start = time.perf_counter()
-    device = torch.device(args.device if args.device else ("cuda" if torch.cuda.is_available() else "cpu"))
+    device = resolve_device(getattr(args, "device", None))
     use_amp = args.amp and device.type == "cuda"
 
     model = SimpleSTBackbone(num_classes=60, T=args.seq_len).to(device)
@@ -242,6 +242,49 @@ def summarize_results(results: Iterable[BenchmarkResult]) -> str:
         lines.append(res.as_row())
     return "\n".join(lines)
 
+def resolve_device(device_arg: Optional[str]) -> torch.device:
+    """
+    Accepts:
+      - None / "" / "auto" -> "cuda" if available else "cpu"
+      - "cpu"
+      - "cuda"
+      - "cuda:0", "cuda:1", ...
+
+    Falls back sensibly and prints a warning to stderr on bad input.
+    """
+    def auto_device() -> torch.device:
+        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    if device_arg in (None, "", "auto"):
+        return auto_device()
+
+    try:
+        dev = torch.device(device_arg)
+    except Exception as exc:
+        print(
+            f"[benchmark] Warning: invalid device '{device_arg}' ({exc}); falling back to auto.",
+            file=sys.stderr,
+        )
+        return auto_device()
+
+    if dev.type == "cuda":
+        if not torch.cuda.is_available():
+            print(
+                f"[benchmark] Warning: CUDA requested ('{device_arg}') but CUDA is not available; using CPU.",
+                file=sys.stderr,
+            )
+            return torch.device("cpu")
+
+        if dev.index is not None and dev.index >= torch.cuda.device_count():
+            print(
+                f"[benchmark] Warning: CUDA device index {dev.index} out of range "
+                f"(found {torch.cuda.device_count()} devices); falling back to cuda:0.",
+                file=sys.stderr,
+            )
+            # If there is at least one CUDA device, cuda:0 is valid here
+            return torch.device("cuda:0")
+
+    return dev
 
 # ---------------------------------------------------------------------------
 # CLI
@@ -259,7 +302,7 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument("--batch-size", type=int, default=2, help="Batch size for synthetic inputs")
     parser.add_argument("--seq-len", type=int, default=50, help="Sequence length (T) for synthetic inputs")
     parser.add_argument("--steps", type=int, default=3, help="Number of optimizer steps to run")
-    parser.add_argument("--device", choices=["cpu", "cuda"], default=None, help="Force a device (defaults to auto)")
+    parser.add_argument("--device", type=str, default=None, help="Device string, e.g. 'cpu', 'cuda', 'cuda:0', 'cuda:1' (default: auto)")
     parser.add_argument("--amp", action=argparse.BooleanOptionalAction, default=False, help="Enable AMP when CUDA is available")
     return parser.parse_args(argv)
 
