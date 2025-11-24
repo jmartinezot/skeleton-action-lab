@@ -97,6 +97,25 @@ def main():
     print("New x_test :", x_test_conv.shape)
 
     print("\nConverting y from one-hot to class indices ...")
-    y_train_idx = convert_l_
+    y_train_idx = convert_labels(y_train)
+    y_test_idx = convert_labels(y_test)
+
+    print("New y_train:", y_train_idx.shape)
+    print("New y_test :", y_test_idx.shape)
+
+    print(f"\nSaving converted file to {out_path} ...")
+    np.savez_compressed(
+        out_path,
+        x_train=x_train_conv,
+        y_train=y_train_idx,
+        x_test=x_test_conv,
+        y_test=y_test_idx,
+    )
+
+    print("Done.")
+
+
+if __name__ == "__main__":
+    main()
 
 
