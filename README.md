@@ -144,6 +144,7 @@ Dockerfile can add them to `/workspace/` inside the container:
 | `skeleton_dataset_ctrgcn.py` | Defines a PyTorch `Dataset` for the converted skeleton tensors, optionally dropping the second person stream, and includes a loader sanity check. |
 | `train_npz_mlp.py` | Runs a lightweight MLP baseline directly on the Kaggle `.npz` file to stress-test your GPU/VRAM and confirm the data loads. |
 | `train_skeleton_gcn.py` | Trains a toy spatio-temporal baseline built on `skeleton_dataset_ctrgcn.py` to validate the end-to-end skeleton pipeline. |
+| `benchmark_models.py` | Runs quick synthetic training loops for the bundled models to confirm imports/device setup and measure wall-clock timing. Offers both CLI and Tkinter GUI modes. |
 
 Feel free to run any of these scripts inside the container (e.g., `python check_gpu.py`).
 
