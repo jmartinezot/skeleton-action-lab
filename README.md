@@ -106,7 +106,7 @@ makes it easy to reuse conversions across experiments.
 2. Convert the Kaggle layout to the CTR-GCN layout (runs on CPU, fast):
 
    ```bash
-   python convert_ntu60_kaggle_to_ctrgcn.py \
+   python3 convert_ntu60_kaggle_to_ctrgcn.py \
      --input /home/bob/Datasets/NTU60/kaggle_raw/NTU60_CS.npz \
      --output /home/bob/Datasets/NTU60/ctrgcn/NTU60_CS.npz
    ```
@@ -124,7 +124,7 @@ makes it easy to reuse conversions across experiments.
 
    ```bash
    cd /workspace/CTR-GCN
-   python main.py \
+   python3 main.py \
      --config ./config/nturgbd-cross-subject/default.yaml \
      --work-dir ../work_dir/ctrgcn_ntu60_xsub_joint
    ```
@@ -159,7 +159,10 @@ specific model.
 
 Several utility scripts ship with the Docker image to make quick GPU and dataset
 checks easier. They live at the repository root so the `COPY` instruction in the
-Dockerfile can add them to `/workspace/` inside the container:
+Dockerfile can add them to `/workspace/` inside the container. During the build, all
+Python files (`*.py`) at the repository root are also copied into
+`/workspace/scripts` for easy reuse and quick iteration once you're inside the
+container:
 
 | Script | Purpose |
 |--------|---------|
@@ -169,7 +172,7 @@ Dockerfile can add them to `/workspace/` inside the container:
 | `skeleton_dataset_ctrgcn.py` | Defines a PyTorch `Dataset` for the converted skeleton tensors, optionally dropping the second person stream, and includes a loader sanity check. |
 | `train_npz_mlp.py` | Runs a lightweight MLP baseline directly on the Kaggle `.npz` file to stress-test your GPU/VRAM and confirm the data loads. |
 | `train_skeleton_gcn.py` | Trains a toy spatio-temporal baseline built on `skeleton_dataset_ctrgcn.py` to validate the end-to-end skeleton pipeline. |
-| `benchmark_models.py` | Runs quick synthetic training loops for the bundled models to confirm imports/device setup and measure wall-clock timing. Offers both CLI and Tkinter GUI modes. |
+| `benchmark_models.py` | Runs quick synthetic training loops for the bundled models to confirm imports/device setup and measure wall-clock timing via a CLI. |
 
 ### 🔧 Script usage examples
 
@@ -177,31 +180,31 @@ Run these commands inside a container (paths assume the `ctrgcn` image and the m
 
 ```bash
 # Confirm the GPU and PyTorch installation
-python check_gpu.py
+python3 check_gpu.py
 
 # Peek at the contents of a Kaggle-style npz
-python dataset_tools/inspect_npz.py --path /workspace/CTR-GCN/data/ntu/NTU60_CS.npz
+python3 dataset_tools/inspect_npz.py --path /workspace/CTR-GCN/data/ntu/NTU60_CS.npz
 
 # Convert Kaggle layout to CTR-GCN layout
-python convert_ntu60_kaggle_to_ctrgcn.py \
+python3 convert_ntu60_kaggle_to_ctrgcn.py \
   --input /workspace/CTR-GCN/data/ntu/NTU60_CS.npz \
   --output /workspace/CTR-GCN/data/ntu/NTU60_CS_ctrgcn.npz
 
 # Train a quick MLP sanity check on the Kaggle file
-python train_npz_mlp.py \
+python3 train_npz_mlp.py \
   --npz-path /workspace/CTR-GCN/data/ntu/NTU60_CS.npz \
   --epochs 5 --batch-size 256 --device cuda:0
 
 # Train the toy GCN baseline on the converted file
-python train_skeleton_gcn.py \
+python3 train_skeleton_gcn.py \
   --npz-path /workspace/CTR-GCN/data/ntu/NTU60_CS_ctrgcn.npz \
   --epochs 5 --batch-size 32 --device cuda:0
 
-# Run synthetic benchmarks for quick timing checks
-python benchmark_models.py --model ctrgcn --steps 50 --device cuda:0
+# Run synthetic benchmarks for quick timing checks (AMP is disabled by default)
+python3 benchmark_models.py --model ctrgcn --steps 50 --device cuda:0 --amp
 ```
 
-Feel free to run any of these scripts inside the container (e.g., `python check_gpu.py`).
+Feel free to run any of these scripts inside the container (e.g., `python3 check_gpu.py`).
 
 ### 🚀 Run the container (CTR-GCN with .npz)
 
@@ -223,7 +226,7 @@ cd /workspace/CTR-GCN
 ## Example: train CTR-GCN on NTU60 cross-subject split
 
 ```bash
-python main.py \
+python3 main.py \
   --config ./config/nturgbd-cross-subject/default.yaml \
   --work-dir ../work_dir/ctrgcn_ntu60_xsub_joint
 ```
@@ -245,8 +248,8 @@ Inside:
 
 ```bash
 cd /workspace/MS-G3D
-cd data_gen && python ntu_gendata.py && cd ..
-python main.py \
+cd data_gen && python3 ntu_gendata.py && cd ..
+python3 main.py \
   --config config/nturgbd-cross-subject/train_joint.yaml \
   --work-dir work_dir/ntu60/xsub/msg3d_joint \
   --device 0 \
