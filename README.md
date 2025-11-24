@@ -131,6 +131,14 @@ python3 /workspace/scripts/dataset_tools/convert_kaggle_to_skeleton5d.py \
   --output /workspace/CTR-GCN/data/ntu/skeleton5d/NTU60_CS_skeleton5d.npz
 ```
 
+You can test it:
+
+```bash
+python3 /workspace/scripts/train_skeleton_gcn.py \
+  --npz-path /workspace/CTR-GCN/data/ntu/skeleton5d/NTU60_CS_skeleton5d.npz \
+  --epochs 5 --batch-size 32 --device cuda:0
+```
+
 ### Convert CTR-GCN layout to MS-G3D layout
 
 Generate the `xsub` splits for MS-G3D from the CTR-GCN tensor (runs inside or outside a
@@ -192,7 +200,6 @@ python3 /workspace/scripts/dataset_tools/inspect_npz.py /workspace/CTR-GCN/data/
 
 # Toy baselines
 python3 /workspace/scripts/train_npz_mlp.py --npz-path /workspace/CTR-GCN/data/ntu/NTU60_CS.npz --epochs 5 --batch-size 256 --device cuda:0
-python3 /workspace/scripts/train_skeleton_gcn.py --npz-path /workspace/CTR-GCN/data/ntu/NTU60_CS.npz --epochs 5 --batch-size 32 --device cuda:0
 ```
 
 # 🚀 Build & Run: MS-G3D
