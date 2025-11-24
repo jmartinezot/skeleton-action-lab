@@ -17,8 +17,14 @@ backbones.
 - [Data Preparation](#-data-preparation)
 - [Quick Start (CTR-GCN with `.npz`)](#-quick-start-ctrgcn-with-npz)
 - [Build and Run the Docker Environments](#-build-and-run-the-docker-environments)
+  - [Build the image](#-build-the-image)
+  - [Helper scripts included in the image](#-helper-scripts-included-in-the-image)
+  - [Script usage examples](#-script-usage-examples)
+  - [Run the container (CTR-GCN with .npz)](#-run-the-container-ctrgcn-with-npz)
+  - [Example: train CTR-GCN on NTU60 cross-subject split](#example-train-ctrgcn-on-ntu60-cross-subject-split)
 - [Quick Start (MS-G3D with converted `.npz`)](#-quick-start-ms-g3d-with-converted-npz)
-- [Run the container (MS-G3D with raw .skeleton files)](#-run-the-container-ms-g3d-with-raw-skeleton-files)
+  - [Run the container (MS-G3D with raw .skeleton files)](#-run-the-container-ms-g3d-with-raw-skeleton-files)
+  - [Notes](#-notes)
 - [Future Work](#-future-work)
 
 Currently included models:
