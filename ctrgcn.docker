@@ -119,6 +119,10 @@ RUN mkdir -p /workspace/CTR-GCN/data /workspace/work_dir
 RUN mkdir -p /workspace/scripts
 COPY *.py /workspace/scripts/
 
+# Create dataset_tools directory and copy all .py files from build context
+RUN mkdir -p /workspace/scripts/dataset_tools
+COPY dataset_tools/*.py /workspace/scripts/dataset_tools/
+
 # Default working directory inside the container
 WORKDIR /workspace/CTR-GCN
 
