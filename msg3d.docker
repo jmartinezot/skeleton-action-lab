@@ -5,7 +5,7 @@
 #
 # Inside the container:
 # /workspace/MS-G3D# python main.py --config config/nturgbd-cross-subject/train_joint.yaml --work-dir work_dir/ntu60/xsub/msg3d_joint --device 0
-# add --half if your setup uses AMP / mixed precision successfully
+# (Apex is not installed; skip --half unless you install it yourself)
 #
 #
 # ============================================================

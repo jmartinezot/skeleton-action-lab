@@ -218,6 +218,8 @@ docker build -t skeleton-lab:msg3d -f msg3d.docker .
 
 ```bash
 docker run -it --rm --gpus all \
+  --shm-size=8g \
+  --mount type=bind,source="$HOME/Datasets/NTU60",target=/workspace/data/NTU60,readonly \
   --mount type=bind,source="$HOME/Datasets/NTU60/msg3d",target=/workspace/MS-G3D/data/ntu \
   skeleton-lab:msg3d
 ```
@@ -227,12 +229,23 @@ the same pattern as above (replace mounts with your paths).
 
 ### Example training commands
 
-Convert CTR-GCN `.npz` to the MS-G3D `xsub` layout (writes to `/workspace/MS-G3D/data/ntu/xsub/`):
+Convert CTR-GCN `.npz` to the MS-G3D `xsub` layout (reads from the mounted CTR-GCN file
+and writes to `/workspace/MS-G3D/data/ntu/xsub/`, which maps to `$HOME/Datasets/NTU60/msg3d`):
 
 ```bash
-cd /workspace
-python3 convert_ctr_npz_to_msg3d.py
+mkdir -p "$HOME/Datasets/NTU60/msg3d"
+docker run -it --rm --gpus all \
+  --mount type=bind,source="$HOME/Datasets/NTU60",target=/workspace/data/NTU60,readonly \
+  --mount type=bind,source="$HOME/Datasets/NTU60/msg3d",target=/workspace/MS-G3D/data/ntu \
+  skeleton-lab:msg3d \
+  bash -lc "python3 /workspace/scripts/convert_ctr_npz_to_msg3d.py \
+    --input /workspace/data/NTU60/ctrgcn/NTU60_CS.npz \
+    --output-root /workspace/MS-G3D/data/ntu"
 ```
+
+This produces `train_data_joint.npy`, `val_data_joint.npy`, `train_label.pkl`,
+`val_label.pkl` under `/workspace/MS-G3D/data/ntu/xsub/` (plus compatibly named
+`train_data.npy`/`val_data.npy`).
 
 Train MS-G3D on the cross-subject split:
 
@@ -242,7 +255,7 @@ python3 main.py \
   --config config/nturgbd-cross-subject/train_joint.yaml \
   --work-dir /workspace/work_dir/ntu60_xsub_msg3d_joint \
   --device 0 \
-  --half
+  --num-worker 4
 ```
 
 To use raw `.skeleton` files, run the built-in generator and launch training (same mount
@@ -255,8 +268,44 @@ python3 main.py \
   --config config/nturgbd-cross-subject/train_joint.yaml \
   --work-dir work_dir/ntu60/xsub/msg3d_joint \
   --device 0 \
-  --half
+  --num-worker 4
 ```
+
+> ℹ️ The upstream MS-G3D code uses NVIDIA Apex for mixed precision (`--half` flag), but
+> Apex is not bundled in this image. Run without `--half`, or install Apex in the container
+> if you need it.
+
+> ℹ️ If you see DataLoader worker bus errors or `/dev/shm` “No space left on device”, run
+> the container with `--shm-size=8g` (as shown above) and reduce loader workers via
+> `--num-worker 4` (or lower).
+
+> ℹ️ If you hit GPU OOM, use `--memory-friendly` (sets smaller batch/window/workers) or
+> manually lower `--batch-size`, `--forward-batch-size`, and set `--train-window-size 64`
+> (and `--test-window-size 64`), plus fewer workers.
+
+### Quick smoke test (short run)
+
+For a fast sanity check (1 epoch, small batch/window), use:
+
+```bash
+cd /workspace/MS-G3D
+python3 main.py \
+  --config config/nturgbd-cross-subject/train_joint.yaml \
+  --work-dir /workspace/work_dir/ntu60_xsub_msg3d_joint_smoke \
+  --device 0 \
+  --num-epoch 1 \
+  --batch-size 8 \
+  --forward-batch-size 4 \
+  --train-window-size 64 \
+  --test-window-size 64 \
+  --num-worker 0 \
+  --memory-friendly \
+  --eval-interval 1 \
+  --save-interval 1
+```
+
+Feel free to shrink further for quicker runs: e.g., `--batch-size 4 --forward-batch-size 2`
+and `--train-window-size 48` (or 32) if VRAM is tight.
 
 ---
 
@@ -299,4 +348,3 @@ Docker build for quick access inside containers.
 - Reintroduce **NVIDIA Apex** for mixed-precision training once the stacks stabilize.
 - Expand data tooling to more skeleton benchmarks beyond NTU RGB+D 60.
 - Adjust host paths to match your environment; all experiment outputs land in your mounted `work_dir` folders.
-
