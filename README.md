@@ -219,7 +219,6 @@ docker build -t skeleton-lab:msg3d -f msg3d.docker .
 ```bash
 docker run -it --rm --gpus all \
   --mount type=bind,source="$HOME/Datasets/NTU60/msg3d",target=/workspace/MS-G3D/data/ntu \
-  --mount type=bind,source="$HOME/MS-G3D_workdir",target=/workspace/work_dir \
   skeleton-lab:msg3d
 ```
 
