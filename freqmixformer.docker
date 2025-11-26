@@ -1,0 +1,68 @@
+# ============================================================
+# Skeleton Action Lab: FreqMixFormer (ACM MM 2024)
+# ============================================================
+#
+# Build:
+#   docker build -t skeleton-lab:freqmixformer -f freqmixformer.docker .
+#
+# Run (mount NTU60 data root):
+#   docker run -it --rm --gpus all --shm-size=8g \
+#     --mount type=bind,source="$HOME/Datasets/NTU60",target=/workspace/data/NTU60,readonly \
+#     skeleton-lab:freqmixformer
+#
+# Inside the container (cross-subject, joints):
+#   cd /workspace/FreqMixFormer
+#   python3 main.py \
+#     --config config/nturgbd-cross-subject/joint.yaml \
+#     --work-dir /workspace/work_dir/freqmixformer_ntu60_xsub_joint \
+#     --device 0
+
+FROM pytorch/pytorch:2.3.0-cuda12.1-cudnn8-runtime
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    TZ=Etc/UTC \
+    PYTHONUNBUFFERED=1
+
+# ------------------------------------------------------------------
+# System dependencies
+# ------------------------------------------------------------------
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    wget \
+    vim \
+    ffmpeg \
+    ca-certificates \
+    build-essential \
+    libglib2.0-0 \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+
+# ------------------------------------------------------------------
+# Copy FreqMixFormer code from the build context
+# ------------------------------------------------------------------
+COPY FreqMixFormer /workspace/FreqMixFormer
+
+# ------------------------------------------------------------------
+# Python dependencies (torch comes from base image)
+# ------------------------------------------------------------------
+RUN pip install --no-cache-dir \
+    "numpy<2.0" \
+    pyyaml \
+    tqdm \
+    tensorboard \
+    tensorboardX \
+    scikit-learn \
+    matplotlib \
+    opencv-python-headless \
+    scipy
+
+# Make local modules importable
+ENV PYTHONPATH=/workspace/FreqMixFormer:${PYTHONPATH}
+
+# Create common mount points
+RUN mkdir -p /workspace/data/NTU60 /workspace/work_dir
+
+WORKDIR /workspace/FreqMixFormer
+
+CMD ["/bin/bash"]

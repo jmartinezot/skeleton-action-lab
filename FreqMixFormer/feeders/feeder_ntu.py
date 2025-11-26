@@ -45,26 +45,58 @@ class Feeder(Dataset):
             self.get_mean_map()
 
     def load_data(self):
-        # data: N C V T M
-        npz_data = np.load(self.data_path)
+        # data: (N, T, D=150) Kaggle one-hot format OR (N, C, T, V, M) CTR-GCN layout
+        npz_data = np.load(self.data_path, allow_pickle=True)
         if self.split == 'train':
-            self.data = npz_data['x_train']
-            self.label = np.where(npz_data['y_train'] > 0)[1]
-            self.sample_name = ['train_' + str(i) for i in range(len(self.data))]
+            raw_data = npz_data['x_train']
+            raw_label = npz_data['y_train']
+            self.sample_name = ['train_' + str(i) for i in range(len(raw_data))]
         elif self.split == 'test':
-            self.data = npz_data['x_test']
-            self.label = np.where(npz_data['y_test'] > 0)[1]
-            self.sample_name = ['test_' + str(i) for i in range(len(self.data))]
+            raw_data = npz_data['x_test']
+            raw_label = npz_data['y_test']
+            self.sample_name = ['test_' + str(i) for i in range(len(raw_data))]
         else:
             raise NotImplementedError('data split only supports train/test')
-        N, T, _ = self.data.shape
-        self.data = self.data.reshape((N, T, 2, 25, 3)).transpose(0, 4, 1, 3, 2)
+
+        # Labels can be one-hot or already integer class ids
+        self.label = self._extract_labels(raw_label)
+        # Data can be flat Kaggle layout or already 5D CTR-GCN layout
+        self.data = self._reshape_data(raw_data)
 
     def get_mean_map(self):
         data = self.data
         N, C, T, V, M = data.shape
         self.mean_map = data.mean(axis=2, keepdims=True).mean(axis=4, keepdims=True).mean(axis=0)
         self.std_map = data.transpose((0, 2, 4, 1, 3)).reshape((N * T * M, C * V)).std(axis=0).reshape((C, 1, V, 1))
+
+    @staticmethod
+    def _extract_labels(raw_label):
+        label = np.asarray(raw_label)
+        if label.ndim == 1:
+            return label.astype(np.int64)
+        if label.ndim == 2:
+            # One-hot or 2D class matrix
+            return label.argmax(axis=1).astype(np.int64)
+        raise ValueError(f"Unsupported label shape {label.shape}; expected 1D class ids or 2D one-hot.")
+
+    @staticmethod
+    def _reshape_data(data):
+        arr = np.asarray(data)
+        if arr.ndim == 5:
+            # Assume already (N, C, T, V, M)
+            return arr
+        if arr.ndim != 3:
+            raise ValueError(f"Unsupported data shape {arr.shape}; expected 3D flat or 5D tensor.")
+
+        n, t, d = arr.shape
+        if d not in (150, 75):
+            raise ValueError(f"Unexpected feature dimension D={d}; expected 150 (25*3*2) or 75 (25*3*1).")
+
+        v = 25
+        c = 3
+        m = 2 if d == 150 else 1
+        arr = arr.reshape((n, t, m, v, c)).transpose(0, 4, 1, 3, 2)
+        return arr
 
     def __len__(self):
         return len(self.label)

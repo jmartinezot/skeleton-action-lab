@@ -16,6 +16,7 @@ CTR-GCN, `msg3d.docker` for MS-G3D) while leaving room to add more backbones.
 - [Data Preparation](#-data-preparation)
 - [Build & Run: CTR-GCN](#-build--run-ctr-gcn)
 - [Build & Run: MS-G3D](#-build--run-ms-g3d)
+- [Build & Run: FreqMixFormer](#-build--run-freqmixformer)
 - [Helper Scripts & Benchmarks](#-helper-scripts--benchmarks)
 - [Future Work](#-future-work)
 
@@ -23,6 +24,8 @@ Currently included models:
 
 - **MS-G3D** (Multi-Scale Graph 3D Network, CVPR 2020) – classic multi-scale ST-GCN backbone
 - **CTR-GCN** (Channel-wise Topology Refinement Graph Convolutional Network, ICCV 2021) – strong, widely used baseline that operates directly on preprocessed `.npz` files
+- **FreqMixFormer** (Frequency Guidance Matters: Skeletal Action Recognition by
+Frequency-Aware Mixed Transformer, ACM MM 2024) – frequency-aware mixed transformer that now reads the same NTU60 tensors (`kaggle_raw` one-hot or converted CTR-GCN 5D)
 
 The environment is designed to answer a very practical question:
 
@@ -42,6 +45,7 @@ It is also a starting point for research on:
 - 🧠 **Model-specific Dockerfiles** (build only what you need):
   - `ctrgcn.docker` – builds an image tailored for CTR-GCN experiments with preprocessed `.npz` tensors
   - `msg3d.docker` – installs the MS-G3D pipeline (data generation + training) without CTR-GCN extras
+  - `freqmixformer.docker` – ships the FreqMixFormer codebase configured to read the shared NTU60 tensors
   - Add new Dockerfiles (e.g., `stgcn.docker`, `mim.docker`) as more models are integrated
 - 🧱 Built on **PyTorch 2.3 + CUDA 12.1** runtime
 
@@ -54,6 +58,7 @@ It is also a starting point for research on:
 | **PyTorch**    | Deep learning framework                           |
 | **MS-G3D**     | Multi-scale ST-GCN for skeleton action recognition |
 | **CTR-GCN**    | GCN with channel-wise topology refinement         |
+| **FreqMixFormer** | Frequency-aware mixed transformer for skeleton actions |
 | **NTU RGB+D 60** | Benchmark dataset for 3D human actions          |
 | **Docker**     | Containerized environment                         |
 
@@ -69,6 +74,7 @@ It is also a starting point for research on:
   - `$HOME/Datasets/NTU60/kaggle_raw/NTU60_CS.npz` – Kaggle download
   - `$HOME/Datasets/NTU60/ctrgcn/NTU60_CS.npz` – CTR-GCN layout (can be a symlink to Kaggle raw)
   - `$HOME/Datasets/NTU60/msg3d/` – MS-G3D layout outputs
+  - FreqMixFormer reuses the CTR-GCN layout or the Kaggle NPZ; mount `$HOME/Datasets/NTU60` into `/workspace/data/NTU60` for its container
   - `$HOME/MS-G3D_workdir` – writable work directory for MS-G3D runs
 
 ## 📦 Data Preparation
@@ -102,6 +108,8 @@ Datasets/
 - MS-G3D layout (`Datasets/NTU60/msg3d/xsub/`): `train_data_joint.npy`, `val_data_joint.npy` (joint positions), and `train_label.pkl`/`val_label.pkl` (labels) generated from the CTR-GCN tensor via `convert_ctr_npz_to_msg3d.py`. MS-G3D derives motion/bone streams internally from these joints.
 
 All current workflows use only 3D joint coordinates (and labels); hand states, quaternions, and camera metadata from raw `.skeleton` files are not used here.
+
+> FreqMixFormer defaults to the CTR-GCN layout at `/workspace/data/NTU60/ctrgcn/NTU60_CS.npz`, but its loader also accepts the Kaggle one-hot file at `/workspace/data/NTU60/kaggle_raw/NTU60_CS.npz`.
 
 ### Kaggle download
 
@@ -315,6 +323,40 @@ python3 main.py \
 
 Feel free to shrink further for quicker runs: e.g., `--batch-size 4 --forward-batch-size 2`
 and `--train-window-size 48` (or 32) if VRAM is tight.
+
+---
+# 🚀 Build & Run: FreqMixFormer
+
+FreqMixFormer can read either the Kaggle `(N, T, 150)` NTU60 file or the converted CTR-GCN tensor `(N, 3, T, 25, 2)`. The default configs point to the CTR-GCN layout at `/workspace/data/NTU60/ctrgcn/NTU60_CS.npz`.
+
+### Build image
+
+```bash
+docker build -t skeleton-lab:freqmixformer -f freqmixformer.docker .
+```
+
+### Run container
+
+```bash
+docker run -it --rm --gpus all \
+  --shm-size=8g \
+  --mount type=bind,source="$HOME/Datasets/NTU60",target=/workspace/data/NTU60,readonly \
+  skeleton-lab:freqmixformer
+```
+
+### Example training command (cross-subject, joint stream)
+
+Inside the container:
+
+```bash
+cd /workspace/FreqMixFormer
+python3 main.py \
+  --config config/nturgbd-cross-subject/joint.yaml \
+  --work-dir /workspace/work_dir/freqmixformer_ntu60_xsub_joint \
+  --device 0
+```
+
+Use `config/nturgbd-cross-subject/motion.yaml` to train the motion stream. To feed the Kaggle one-hot file directly, change both `data_path` entries in the chosen config to `/workspace/data/NTU60/kaggle_raw/NTU60_CS.npz`; the loader auto-detects layout and label format.
 
 ---
 
