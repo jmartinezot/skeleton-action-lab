@@ -94,6 +94,15 @@ Datasets/
         └── NTU60_CS.npz   (symlink to Kaggle raw is fine)
 ```
 
+### What each format contains
+
+- Kaggle raw (`Datasets/NTU60/kaggle_raw/NTU60_CS.npz`): keys `x_train`, `y_train`, `x_test`, `y_test`. Shapes `x_* = (N, T, D=150)` where `150 = 25 joints × 3 coords (x,y,z) × up to 2 persons` flattened; `y_*` are one-hot class labels (60 classes, cross-subject split). Only 3D joints—no orientations or camera metadata.
+- CTR-GCN layout (`Datasets/NTU60/ctrgcn/NTU60_CS.npz`): converted from Kaggle to `(N, C=3, T, V=25, M=2)` plus integer labels `(N,)` for train/test. Consumed by CTR-GCN and by converters to other layouts.
+- Skeleton5D quickstart (`Datasets/NTU60/skeleton5d/NTU60_CS_skeleton5d.npz`): the same `(N, 3, T, 25, 2)` tensor and labels packaged for toy scripts like `train_skeleton_gcn.py`. Not used by MS-G3D.
+- MS-G3D layout (`Datasets/NTU60/msg3d/xsub/`): `train_data_joint.npy`, `val_data_joint.npy` (joint positions), and `train_label.pkl`/`val_label.pkl` (labels) generated from the CTR-GCN tensor via `convert_ctr_npz_to_msg3d.py`. MS-G3D derives motion/bone streams internally from these joints.
+
+All current workflows use only 3D joint coordinates (and labels); hand states, quaternions, and camera metadata from raw `.skeleton` files are not used here.
+
 ### Kaggle download
 
 - Download `NTU60_CS.npz` from Kaggle: https://www.kaggle.com/datasets/jarex616/ntu-rgb-d-60-skeleton-data-npz
