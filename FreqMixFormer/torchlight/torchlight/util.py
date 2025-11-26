@@ -13,7 +13,17 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.autograd import Variable
-from torchpack.runner.hooks import PaviLogger
+
+try:
+    from torchpack.runner.hooks import PaviLogger  # type: ignore
+except Exception:
+    try:
+        from torchpack.callbacks import PaviLogger  # type: ignore
+    except Exception:
+        class PaviLogger:  # type: ignore
+            def __init__(self, *a, **k): pass
+            def connect(self, *a, **k): pass
+            def log(self, *a, **k): pass
 
 
 class IO():
@@ -190,8 +200,42 @@ class DictAction(argparse.Action):
         super(DictAction, self).__init__(option_strings, dest, **kwargs)
 
     def __call__(self, parser, namespace, values, option_string=None):
-        input_dict = eval(f'dict({values})')  #pylint: disable=W0123
+        # Accept YAML/JSON-like strings (e.g., "{window_size:48, random_rot:False}")
+        parsed = None
+        if isinstance(values, str):
+            # normalize by stripping braces
+            cleaned = values.strip()
+            # First try YAML/JSON
+            try:
+                parsed = yaml.safe_load(cleaned)
+            except Exception:
+                parsed = None
+            # If YAML gives a dict, use it
+            if isinstance(parsed, dict):
+                pass
+            else:
+                # Fallback: manual parsing for "k1:v1,k2:v2" forms
+                manual = {}
+                try:
+                    token_str = cleaned.strip("{}")
+                    if token_str:
+                        for token in token_str.split(","):
+                            if not token.strip():
+                                continue
+                            if ":" not in token:
+                                raise ValueError
+                            k, v = token.split(":", 1)
+                            manual[k.strip()] = yaml.safe_load(v.strip())
+                    parsed = manual
+                except Exception:
+                    try:
+                        parsed = eval(f'dict({values})')  # legacy fallback  #pylint: disable=W0123
+                    except Exception:
+                        raise argparse.ArgumentTypeError(f"Could not parse dict arguments: {values}")
+        else:
+            parsed = dict(values)
+
         output_dict = getattr(namespace, self.dest)
-        for k in input_dict:
-            output_dict[k] = input_dict[k]
+        for k, v in parsed.items():
+            output_dict[k] = v
         setattr(namespace, self.dest, output_dict)

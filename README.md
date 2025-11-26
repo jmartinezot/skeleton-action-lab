@@ -17,6 +17,7 @@ CTR-GCN, `msg3d.docker` for MS-G3D) while leaving room to add more backbones.
 - [Build & Run: CTR-GCN](#-build--run-ctr-gcn)
 - [Build & Run: MS-G3D](#-build--run-ms-g3d)
 - [Build & Run: FreqMixFormer](#-build--run-freqmixformer)
+- [Low-memory presets (FreqMixFormer)](#low-memory-preset-smaller-batchwindow)
 - [Helper Scripts & Benchmarks](#-helper-scripts--benchmarks)
 - [Future Work](#-future-work)
 
@@ -335,6 +336,8 @@ FreqMixFormer can read either the Kaggle `(N, T, 150)` NTU60 file or the convert
 docker build -t skeleton-lab:freqmixformer -f freqmixformer.docker .
 ```
 
+This image installs the bundled `torchlight` package from `FreqMixFormer/torchlight` so `DictAction` and logging utilities resolve correctly, and includes `h5py` for torchlight’s IO helpers plus `einops`, `torch-dct`, and `scikit-optimize` (used by `ensemble.py`).
+
 ### Run container
 
 ```bash
@@ -357,6 +360,29 @@ python3 main.py \
 ```
 
 Use `config/nturgbd-cross-subject/motion.yaml` to train the motion stream. To feed the Kaggle one-hot file directly, change both `data_path` entries in the chosen config to `/workspace/data/NTU60/kaggle_raw/NTU60_CS.npz`; the loader auto-detects layout and label format.
+
+### Low-memory preset (smaller batch/window)
+
+If you encounter GPU OOM, a lighter config is provided:
+
+```bash
+cd /workspace/FreqMixFormer
+python3 main.py \
+  --config config/nturgbd-cross-subject/joint_lowmem.yaml \
+  --work-dir /workspace/work_dir/freqmixformer_ntu60_xsub_joint_lowmem \
+  --device 0
+```
+
+This uses `window_size=48`, disables random rotation, sets batch/test batch to 32, and limits data loader workers to 4.
+
+For the motion stream, use the analogous preset:
+
+```bash
+python3 main.py \
+  --config config/nturgbd-cross-subject/motion_lowmem.yaml \
+  --work-dir /workspace/work_dir/freqmixformer_ntu60_xsub_motion_lowmem \
+  --device 0
+```
 
 ---
 

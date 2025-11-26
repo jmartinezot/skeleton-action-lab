@@ -55,10 +55,17 @@ RUN pip install --no-cache-dir \
     scikit-learn \
     matplotlib \
     opencv-python-headless \
-    scipy
+    scipy \
+    h5py \
+    einops \
+    torch-dct \
+    scikit-optimize
 
 # Make local modules importable
 ENV PYTHONPATH=/workspace/FreqMixFormer:${PYTHONPATH}
+
+# Install local torchlight (provides DictAction, logger, etc.)
+RUN pip install --no-cache-dir -e /workspace/FreqMixFormer/torchlight
 
 # Create common mount points
 RUN mkdir -p /workspace/data/NTU60 /workspace/work_dir

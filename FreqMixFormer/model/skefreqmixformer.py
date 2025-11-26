@@ -56,7 +56,7 @@ class Ske_MixF(nn.Module):
 
 
 class Model(nn.Module):
-    def __init__(self, num_class=60, num_point=25, num_person=2, graph=None, graph_args=dict(), in_channels=3):
+    def __init__(self, num_class=60, num_point=25, num_person=2, graph=None, graph_args=dict(), in_channels=3, frame_size=64):
         super(Model, self).__init__()
         if graph is None:
             raise ValueError()
@@ -72,17 +72,22 @@ class Model(nn.Module):
         self.data_bn = nn.BatchNorm1d(num_person * 80 * num_point)        
         self.to_joint_embedding = nn.Linear(in_channels, 80)
         self.pos_embedding = nn.Parameter(torch.randn(1, self.num_point, 80))
-        
-        self.l1 = Ske_MixF(80, 80, A, 64, residual=False)
-        self.l2 = Ske_MixF(80, 80, A, 64)
-        self.l3 = Ske_MixF(80, 80, A, 64)
-        self.l4 = Ske_MixF(80, 80, A, 64)
-        self.l5 = Ske_MixF(80, 160, A, 32, stride=2)
-        self.l6 = Ske_MixF(160, 160, A, 32)
-        self.l7 = Ske_MixF(160, 160, A, 32)
-        self.l8 = Ske_MixF(160, 320, A, 16, stride=2)
-        self.l9 = Ske_MixF(320, 320, A, 16)
-        self.l10= Ske_MixF(320, 320, A, 16)
+
+        # Allow variable temporal window; downstream blocks reduce by stride 2 twice.
+        base_frames = max(1, int(frame_size))
+        mid_frames = max(1, base_frames // 2)
+        low_frames = max(1, mid_frames // 2)
+
+        self.l1 = Ske_MixF(80, 80, A, base_frames, residual=False)
+        self.l2 = Ske_MixF(80, 80, A, base_frames)
+        self.l3 = Ske_MixF(80, 80, A, base_frames)
+        self.l4 = Ske_MixF(80, 80, A, base_frames)
+        self.l5 = Ske_MixF(80, 160, A, mid_frames, stride=2)
+        self.l6 = Ske_MixF(160, 160, A, mid_frames)
+        self.l7 = Ske_MixF(160, 160, A, mid_frames)
+        self.l8 = Ske_MixF(160, 320, A, low_frames, stride=2)
+        self.l9 = Ske_MixF(320, 320, A, low_frames)
+        self.l10= Ske_MixF(320, 320, A, low_frames)
         
         # self.l1 = Ske_MixF(80, 80, A, 52, residual=False)
         # self.l2 = Ske_MixF(80, 80, A, 52)
@@ -160,7 +165,6 @@ class Model(nn.Module):
         x = x.mean(3).mean(1)
 
         return self.fc(x)
-
 
 
 
