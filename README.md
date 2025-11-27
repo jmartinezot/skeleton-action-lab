@@ -14,8 +14,8 @@ CTR-GCN, `msg3d.docker` for MS-G3D) while leaving room to add more backbones.
 - [Stack Overview](#-stack-overview)
 - [Prerequisites](#-prerequisites)
 - [Data Preparation](#-data-preparation)
-- [Build & Run: CTR-GCN](#-build--run-ctr-gcn)
 - [Build & Run: Baselines](#-build--run-baselines)
+- [Build & Run: CTR-GCN](#-build--run-ctr-gcn)
 - [Build & Run: MS-G3D](#-build--run-ms-g3d)
 - [Build & Run: FreqMixFormer](#-build--run-freqmixformer)
 - [Build & Run: SkateFormer](#-build--run-skateformer)
@@ -78,7 +78,6 @@ It is also a starting point for research on:
 - **Host paths** (customize as needed):
   - `$HOME/Datasets/NTU60/` – root folder for all NTU RGB+D 60 assets
   - `$HOME/Datasets/NTU60/kaggle_raw/NTU60_CS.npz` – Kaggle download (one file drives all stacks here)
-  - `$HOME/Datasets/NTU60/ctrgcn/NTU60_CS.npz` – optional symlink/copy to the Kaggle file for convenience
   - FreqMixFormer and CTR-GCN both accept the Kaggle NPZ directly; mount `$HOME/Datasets/NTU60` into `/workspace/data/NTU60` for FreqMixFormer or bind the single file for CTR-GCN
   - `$HOME/MS-G3D_workdir` – writable work directory for MS-G3D runs
 
@@ -93,16 +92,13 @@ Datasets/
 └── NTU60/
     ├── kaggle_raw/
     │   └── NTU60_CS.npz
-    ├── skeleton5d/
-    │   └── NTU60_CS_skeleton5d.npz
-    └── ctrgcn/
-        └── NTU60_CS.npz   (symlink/copy to Kaggle raw; optional)
+    └── skeleton5d/
+        └── NTU60_CS_skeleton5d.npz
 ```
 
 ### What each format contains
 
 - Kaggle raw (`Datasets/NTU60/kaggle_raw/NTU60_CS.npz`): keys `x_train`, `y_train`, `x_test`, `y_test`. Shapes `x_* = (N, T, D=150)` where `150 = 25 joints × 3 coords (x,y,z) × up to 2 persons` flattened; `y_*` are one-hot class labels (60 classes, cross-subject split). Only 3D joints—no orientations or camera metadata.
-- CTR-GCN loader accepts the Kaggle NPZ directly. If you keep a separate path, symlink/copy the Kaggle file to `Datasets/NTU60/ctrgcn/NTU60_CS.npz`.
 - Skeleton5D quickstart (`Datasets/NTU60/skeleton5d/NTU60_CS_skeleton5d.npz`): the same `(N, 3, T, 25, 2)` tensor and labels packaged for toy scripts like `train_skeleton_gcn.py`. Not used by MS-G3D.
 
 All current workflows use only 3D joint coordinates (and labels); hand states, quaternions, and camera metadata from raw `.skeleton` files are not used here.
@@ -117,18 +113,6 @@ All current workflows use only 3D joint coordinates (and labels); hand states, q
 ```bash
 mkdir -p "$HOME/Datasets/NTU60/kaggle_raw"
 cp NTU60_CS.npz "$HOME/Datasets/NTU60/kaggle_raw/"
-```
-
-### (Optional) convert to CTR-GCN layout
-
-CTR-GCN and most loaders here can read the Kaggle NPZ directly. If you still want a
-separate CTR-GCN path, you can convert or simply symlink/copy:
-
-```bash
-mkdir -p "$HOME/Datasets/NTU60/ctrgcn"
-ln -s "$HOME/Datasets/NTU60/kaggle_raw/NTU60_CS.npz" "$HOME/Datasets/NTU60/ctrgcn/NTU60_CS.npz"
-# or use the converter to rewrite the layout if desired:
-# python3 convert_ntu60_kaggle_to_ctrgcn.py --input "$HOME/Datasets/NTU60/kaggle_raw/NTU60_CS.npz" --output "$HOME/Datasets/NTU60/ctrgcn/NTU60_CS.npz"
 ```
 
 ### Convert to skeleton5d layout (for `train_skeleton_gcn.py`)
@@ -157,6 +141,46 @@ python3 /workspace/scripts/train_skeleton_gcn.py \
 ```
 
 ---
+# 🚀 Build & Run: Baselines
+
+Baseline scripts (MLP sanity checks, tiny ST-GCN, synthetic benchmarks) live in `baselines/`
+and run off the Kaggle NPZ or synthetic data.
+
+### Build image
+
+```bash
+docker build -t skeleton-lab:baselines -f baselines.docker .
+```
+
+### Run container (mount Kaggle NPZ)
+
+```bash
+docker run -it --rm --gpus all \
+  --shm-size=8g \
+  --mount type=bind,source="$HOME/Datasets/NTU60/kaggle_raw/NTU60_CS.npz",target=/workspace/data/NTU60/NTU60_CS.npz,readonly \
+  skeleton-lab:baselines
+```
+
+Inside the container:
+
+```bash
+# GPU sanity
+python /workspace/baselines/check_gpu.py
+
+# MLP sanity run on Kaggle NPZ
+python /workspace/baselines/train_npz_mlp.py
+
+# Synthetic model timings
+python /workspace/baselines/benchmark_models.py --steps 50 --device cuda:0 --amp
+```
+
+Notes:
+- `train_skeleton_gcn.py` / `train_skeleton_gcn_simple_backbone.py` and the shared dataset
+  now accept Kaggle or CTR layouts directly (the loader reshapes Kaggle `(N, T, 150)` to
+  `(N, 3, T, 25, 2)` and converts one-hot labels).
+- CTR-GCN–specific training loops were moved to `ctrgcn_extras/` and are not part of the
+  baselines image.
+
 # 🚀 Build & Run: CTR-GCN
 
 CTR-GCN can read the Kaggle NTU60 NPZ directly (no extra conversion required). Bind-mount

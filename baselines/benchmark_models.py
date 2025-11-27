@@ -52,111 +52,6 @@ class BenchmarkTask:
 
 
 # ---------------------------------------------------------------------------
-# CTR-GCN synthetic training loop
-# ---------------------------------------------------------------------------
-
-def run_ctrgcn(args: argparse.Namespace) -> BenchmarkResult:
-    start = time.perf_counter()
-    device = resolve_device(getattr(args, "device", None))
-    use_amp = args.amp and device.type == "cuda"
-
-    ctrgcn_root = Path("/workspace/CTR-GCN")
-    ms_g3d_root = Path("/workspace/MS-G3D")
-    if not ctrgcn_root.exists():
-        return BenchmarkResult(
-            name="CTR-GCN",
-            success=False,
-            seconds=0.0,
-            steps=args.steps,
-            batch_size=args.batch_size,
-            seq_len=args.seq_len,
-            device=str(device),
-            amp=use_amp,
-            message="(skipped: /workspace/CTR-GCN not found)",
-        )
-
-    # Control sys.path so CTR-GCN takes precedence over MS-G3D in imports
-    for root in (str(ctrgcn_root), str(ms_g3d_root)):
-        if root in sys.path:
-            sys.path.remove(root)
-    sys.path.insert(0, str(ctrgcn_root))
-    sys.path.append(str(ms_g3d_root))
-
-    try:
-        from model import ctrgcn  # type: ignore
-    except Exception as exc:  # pragma: no cover - import guard
-        return BenchmarkResult(
-            name="CTR-GCN",
-            success=False,
-            seconds=0.0,
-            steps=args.steps,
-            batch_size=args.batch_size,
-            seq_len=args.seq_len,
-            device=str(device),
-            amp=use_amp,
-            message=f"(import failed: {exc})",
-        )
-
-    model = ctrgcn.Model(
-        num_class=60,
-        num_point=25,
-        num_person=2,
-        graph="graph.ntu_rgb_d.Graph",
-        graph_args={"labeling_mode": "spatial"},
-        in_channels=3,
-        drop_out=0.0,
-        adaptive=True,
-    ).to(device)
-
-    model.train()
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-    criterion = nn.CrossEntropyLoss()
-    scaler = GradScaler(enabled=use_amp)
-
-    iterations = args.steps
-    batch_size = args.batch_size
-    seq_len = args.seq_len
-
-    try:
-        for _ in range(iterations):
-            x = torch.randn(batch_size, 3, seq_len, 25, 2, device=device)
-            y = torch.randint(0, 60, (batch_size,), device=device)
-
-            optimizer.zero_grad()
-            with autocast(enabled=use_amp):
-                logits = model(x)
-                loss = criterion(logits, y)
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
-    except Exception as exc:  # pragma: no cover - runtime guard
-        duration = time.perf_counter() - start
-        return BenchmarkResult(
-            name="CTR-GCN",
-            success=False,
-            seconds=duration,
-            steps=iterations,
-            batch_size=batch_size,
-            seq_len=seq_len,
-            device=str(device),
-            amp=use_amp,
-            message=f"(runtime error: {exc})",
-        )
-
-    duration = time.perf_counter() - start
-    return BenchmarkResult(
-        name="CTR-GCN",
-        success=True,
-        seconds=duration,
-        steps=iterations,
-        batch_size=batch_size,
-        seq_len=seq_len,
-        device=str(device),
-        amp=use_amp,
-    )
-
-
-# ---------------------------------------------------------------------------
 # Simple ST-GCN-style backbone synthetic training loop
 # ---------------------------------------------------------------------------
 
@@ -223,11 +118,6 @@ def run_simple_stgcn(args: argparse.Namespace) -> BenchmarkResult:
 
 def available_tasks() -> Dict[str, BenchmarkTask]:
     return {
-        "ctrgcn": BenchmarkTask(
-            name="CTR-GCN",
-            description="Synthetic AMP training loop for CTR-GCN (requires /workspace/CTR-GCN)",
-            runner=run_ctrgcn,
-        ),
         "simple": BenchmarkTask(
             name="SimpleSTBackbone",
             description="Tiny ST-GCN-style baseline defined in train_skeleton_gcn_simple_backbone.py",
