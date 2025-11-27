@@ -48,6 +48,7 @@ It is also a starting point for research on:
   - `ctrgcn.docker` – builds an image tailored for CTR-GCN experiments with preprocessed `.npz` tensors
   - `msg3d.docker` – installs the MS-G3D pipeline (data generation + training) without CTR-GCN extras
   - `freqmixformer.docker` – ships the FreqMixFormer codebase configured to read the shared NTU60 tensors
+  - `skateformer.docker` – bundles the SkateFormer transformer that trains directly on the Kaggle NPZ
   - Add new Dockerfiles (e.g., `stgcn.docker`, `mim.docker`) as more models are integrated
 - 🧱 Built on **PyTorch 2.3 + CUDA 12.1** runtime
 
@@ -61,6 +62,7 @@ It is also a starting point for research on:
 | **MS-G3D**     | Multi-scale ST-GCN for skeleton action recognition |
 | **CTR-GCN**    | GCN with channel-wise topology refinement         |
 | **FreqMixFormer** | Frequency-aware mixed transformer for skeleton actions |
+| **SkateFormer** | Skeletal-temporal transformer that reads the Kaggle NPZ directly |
 | **NTU RGB+D 60** | Benchmark dataset for 3D human actions          |
 | **Docker**     | Containerized environment                         |
 
@@ -75,7 +77,6 @@ It is also a starting point for research on:
   - `$HOME/Datasets/NTU60/` – root folder for all NTU RGB+D 60 assets
   - `$HOME/Datasets/NTU60/kaggle_raw/NTU60_CS.npz` – Kaggle download
   - `$HOME/Datasets/NTU60/ctrgcn/NTU60_CS.npz` – CTR-GCN layout (can be a symlink to Kaggle raw)
-  - `$HOME/Datasets/NTU60/msg3d/` – MS-G3D layout outputs
   - FreqMixFormer reuses the CTR-GCN layout or the Kaggle NPZ; mount `$HOME/Datasets/NTU60` into `/workspace/data/NTU60` for its container
   - `$HOME/MS-G3D_workdir` – writable work directory for MS-G3D runs
 
@@ -92,12 +93,6 @@ Datasets/
     │   └── NTU60_CS.npz
     ├── skeleton5d/
     │   └── NTU60_CS_skeleton5d.npz
-    ├── msg3d/
-    │   └── xsub/
-    │       ├── train_data_joint.npy
-    │       ├── train_label.pkl
-    │       ├── val_data_joint.npy
-    │       └── val_label.pkl
     └── ctrgcn/
         └── NTU60_CS.npz   (symlink to Kaggle raw is fine)
 ```
@@ -107,7 +102,6 @@ Datasets/
 - Kaggle raw (`Datasets/NTU60/kaggle_raw/NTU60_CS.npz`): keys `x_train`, `y_train`, `x_test`, `y_test`. Shapes `x_* = (N, T, D=150)` where `150 = 25 joints × 3 coords (x,y,z) × up to 2 persons` flattened; `y_*` are one-hot class labels (60 classes, cross-subject split). Only 3D joints—no orientations or camera metadata.
 - CTR-GCN layout (`Datasets/NTU60/ctrgcn/NTU60_CS.npz`): converted from Kaggle to `(N, C=3, T, V=25, M=2)` plus integer labels `(N,)` for train/test. Consumed by CTR-GCN and by converters to other layouts.
 - Skeleton5D quickstart (`Datasets/NTU60/skeleton5d/NTU60_CS_skeleton5d.npz`): the same `(N, 3, T, 25, 2)` tensor and labels packaged for toy scripts like `train_skeleton_gcn.py`. Not used by MS-G3D.
-- MS-G3D layout (`Datasets/NTU60/msg3d/xsub/`): `train_data_joint.npy`, `val_data_joint.npy` (joint positions), and `train_label.pkl`/`val_label.pkl` (labels) generated from the CTR-GCN tensor via `convert_ctr_npz_to_msg3d.py`. MS-G3D derives motion/bone streams internally from these joints.
 
 All current workflows use only 3D joint coordinates (and labels); hand states, quaternions, and camera metadata from raw `.skeleton` files are not used here.
 
@@ -157,20 +151,6 @@ python3 /workspace/scripts/train_skeleton_gcn.py \
   --npz-path /workspace/CTR-GCN/data/ntu/skeleton5d/NTU60_CS_skeleton5d.npz \
   --epochs 5 --batch-size 32 --device cuda:0
 ```
-
-### Convert CTR-GCN layout to MS-G3D layout
-
-Generate the `xsub` splits for MS-G3D from the CTR-GCN tensor (runs inside or outside a
-container):
-
-```bash
-python3 convert_ctr_npz_to_msg3d.py \
-  --input "$HOME/Datasets/NTU60/ctrgcn/NTU60_CS.npz" \
-  --output-root "$HOME/Datasets/NTU60/msg3d"
-```
-
-Bind-mount `$HOME/Datasets/NTU60` into the container paths shown below so both models see
-their expected layouts.
 
 ---
 # 🚀 Build & Run: CTR-GCN
@@ -223,9 +203,7 @@ python3 /workspace/scripts/train_npz_mlp.py --npz-path /workspace/CTR-GCN/data/n
 
 # 🚀 Build & Run: MS-G3D
 
-MS-G3D can consume the converted CTR-GCN tensor or the original `.skeleton` files. The
-example below assumes the converted `.npz` workflow with a work directory mounted at
-`/workspace/work_dir`.
+MS-G3D now trains directly from the Kaggle NPZ (no MS-G3D `xsub` layout needed).
 
 ### Build image
 
@@ -233,59 +211,22 @@ example below assumes the converted `.npz` workflow with a work directory mounte
 docker build -t skeleton-lab:msg3d -f msg3d.docker .
 ```
 
-### Run container
+### Run container (mount Kaggle NPZ)
 
 ```bash
 docker run -it --rm --gpus all \
   --shm-size=8g \
-  --mount type=bind,source="$HOME/Datasets/NTU60",target=/workspace/data/NTU60,readonly \
-  --mount type=bind,source="$HOME/Datasets/NTU60/msg3d",target=/workspace/MS-G3D/data/ntu \
+  --mount type=bind,source="$HOME/Datasets/NTU60/kaggle_raw/NTU60_CS.npz",target=/workspace/MS-G3D/data/ntu/NTU60_CS.npz,readonly \
   skeleton-lab:msg3d
 ```
 
-If using raw `.skeleton` files instead, bind the raw dataset and processed output paths in
-the same pattern as above (replace mounts with your paths).
-
-### Example training commands
-
-Convert CTR-GCN `.npz` to the MS-G3D `xsub` layout (reads from the mounted CTR-GCN file
-and writes to `/workspace/MS-G3D/data/ntu/xsub/`, which maps to `$HOME/Datasets/NTU60/msg3d`):
-
-```bash
-mkdir -p "$HOME/Datasets/NTU60/msg3d"
-docker run -it --rm --gpus all \
-  --mount type=bind,source="$HOME/Datasets/NTU60",target=/workspace/data/NTU60,readonly \
-  --mount type=bind,source="$HOME/Datasets/NTU60/msg3d",target=/workspace/MS-G3D/data/ntu \
-  skeleton-lab:msg3d \
-  bash -lc "python3 /workspace/scripts/convert_ctr_npz_to_msg3d.py \
-    --input /workspace/data/NTU60/ctrgcn/NTU60_CS.npz \
-    --output-root /workspace/MS-G3D/data/ntu"
-```
-
-This produces `train_data_joint.npy`, `val_data_joint.npy`, `train_label.pkl`,
-`val_label.pkl` under `/workspace/MS-G3D/data/ntu/xsub/` (plus compatibly named
-`train_data.npy`/`val_data.npy`).
-
-Train MS-G3D on the cross-subject split:
+### Example training command (cross-subject Kaggle split)
 
 ```bash
 cd /workspace/MS-G3D
 python3 main.py \
-  --config config/nturgbd-cross-subject/train_joint.yaml \
-  --work-dir /workspace/work_dir/ntu60_xsub_msg3d_joint \
-  --device 0 \
-  --num-worker 4
-```
-
-To use raw `.skeleton` files, run the built-in generator and launch training (same mount
-pattern as above, just pointing to raw data):
-
-```bash
-cd /workspace/MS-G3D
-cd data_gen && python3 ntu_gendata.py && cd ..
-python3 main.py \
-  --config config/nturgbd-cross-subject/train_joint.yaml \
-  --work-dir work_dir/ntu60/xsub/msg3d_joint \
+  --config config/nturgbd-cross-subject/train_joint_kaggle.yaml \
+  --work-dir /workspace/work_dir/ntu60_xsub_msg3d_joint_kaggle \
   --device 0 \
   --num-worker 4
 ```
@@ -309,7 +250,7 @@ For a fast sanity check (1 epoch, small batch/window), use:
 ```bash
 cd /workspace/MS-G3D
 python3 main.py \
-  --config config/nturgbd-cross-subject/train_joint.yaml \
+  --config config/nturgbd-cross-subject/train_joint_kaggle.yaml \
   --work-dir /workspace/work_dir/ntu60_xsub_msg3d_joint_smoke \
   --device 0 \
   --num-epoch 1 \
@@ -540,7 +481,6 @@ Docker build for quick access inside containers.
 | `check_gpu.py` | Print CUDA availability, device count, device name, and PyTorch/CUDA versions. |
 | `dataset_tools/inspect_npz.py` | Dump keys, shapes, and dtypes in an NTU60 `.npz` archive (defaults to `/workspace/CTR-GCN/data/ntu/NTU60_CS.npz`). |
 | `convert_ntu60_kaggle_to_ctrgcn.py` | Convert the Kaggle-style `(N, T, D=150)` file into the `(N, C, T, V, M)` layout used by CTR-GCN. |
-| `convert_ctr_npz_to_msg3d.py` | Bridge from the CTR-GCN tensor to the MS-G3D `xsub` preprocessing pipeline. |
 
 ### Baselines and experiments
 

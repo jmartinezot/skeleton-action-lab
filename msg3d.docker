@@ -36,11 +36,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /workspace
 
 # ------------------------------------------------------------------
-# Clone MS-G3D (skeleton-based action recognition, CVPR 2020)
-# ------------------------------------------------------------------
-RUN git clone https://github.com/kenziyuliu/MS-G3D.git
-
-# ------------------------------------------------------------------
 # Python dependencies (keep torch from base image)
 # ------------------------------------------------------------------
 RUN pip install --no-cache-dir \
@@ -61,14 +56,14 @@ RUN pip install --no-cache-dir \
     onnx
 
 # ------------------------------------------------------------------
+# Copy the local MS-G3D source (patched main.py included)
+# ------------------------------------------------------------------
+COPY MS-G3D /workspace/MS-G3D
+
+# ------------------------------------------------------------------
 # Copy the NPZ→MS-G3D converter script into the image
 # ------------------------------------------------------------------
 COPY convert_ctr_npz_to_msg3d.py /workspace/MS-G3D/convert_ctr_npz_to_msg3d.py
-
-# ------------------------------------------------------------------
-# Copy the patched main.py script into the image
-# ------------------------------------------------------------------
-COPY MS-G3D/main.py /workspace/MS-G3D/main.py
 
 # (Optional) expose repo root for imports when running outside the repo dir
 ENV PYTHONPATH=/workspace/MS-G3D:${PYTHONPATH}
