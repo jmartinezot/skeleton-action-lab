@@ -516,8 +516,12 @@ class Processor():
 
                 self.eval(epoch, save_score=self.arg.save_score, loader_name=['test'])
 
-            # test the best model
-            weights_path = glob.glob(os.path.join(self.arg.work_dir, 'runs-'+str(self.best_acc_epoch)+'*'))[0]
+            # test the best model (if any checkpoint was saved)
+            candidates = glob.glob(os.path.join(self.arg.work_dir, f'runs-{self.best_acc_epoch}*'))
+            if not candidates:
+                self.print_log('No saved checkpoints found (save_epoch too high or num_epoch too low); skipping final eval.')
+                return
+            weights_path = candidates[0]
             weights = torch.load(weights_path)
             if type(self.arg.device) is list:
                 if len(self.arg.device) > 1:

@@ -14,6 +14,7 @@ import numpy as np
 import torch
 from torch import nn
 from torch.utils.data import Dataset, DataLoader
+import argparse
 
 
 class NTU60NPZDataset(Dataset):
@@ -59,8 +60,7 @@ class SimpleMLP(nn.Module):
         return self.net(x)
 
 
-def main():
-    npz_path = Path("/workspace/CTR-GCN/data/ntu/NTU60_CS.npz")
+def run(npz_path: Path):
     if not npz_path.exists():
         raise FileNotFoundError(f"NPZ not found at {npz_path}")
 
@@ -68,13 +68,11 @@ def main():
     train_ds = NTU60NPZDataset(npz_path, split="train")
     print(f"Train size: {len(train_ds)}")
 
-    # small batch to be kind to VRAM
     train_loader = DataLoader(train_ds, batch_size=32, shuffle=True, num_workers=2, pin_memory=True)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Using device:", device)
 
-    # infer dims
     sample_x, _ = train_ds[0]
     T, D = sample_x.shape
     model = SimpleMLP(input_dim=T * D, num_classes=60).to(device)
@@ -82,7 +80,6 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     criterion = nn.CrossEntropyLoss()
 
-    # train just a few iterations to see if it runs
     model.train()
     max_batches = 50
     for batch_idx, (x, y) in enumerate(train_loader):
@@ -107,5 +104,12 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
-
+    parser = argparse.ArgumentParser(description="Tiny MLP sanity check on Kaggle NTU60 NPZ")
+    parser.add_argument(
+        "--npz-path",
+        type=str,
+        default="/workspace/data/NTU60/NTU60_CS.npz",
+        help="Path to Kaggle NTU60_CS.npz",
+    )
+    args = parser.parse_args()
+    run(Path(args.npz_path))

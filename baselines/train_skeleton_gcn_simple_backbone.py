@@ -46,7 +46,7 @@ class SimpleSTBackbone(nn.Module):
 
 
 def main():
-    npz_path = Path("/workspace/CTR-GCN/data/ntu/NTU60_CS_ctrgcn.npz")
+    npz_path = Path("/workspace/data/NTU60/NTU60_CS.npz")
     ds = NTU60SkeletonDataset(npz_path, split="train", use_both_persons=True)
     loader = DataLoader(ds, batch_size=16, shuffle=True, num_workers=4, pin_memory=True)
 
@@ -95,4 +95,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

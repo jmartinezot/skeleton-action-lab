@@ -45,12 +45,12 @@ def resolve_device(device_arg: str | None) -> torch.device:
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Train ST-GCN sanity check on CTR-GCN npz tensors")
+    parser = argparse.ArgumentParser(description="Train ST-GCN sanity check on NTU60 NPZ (Kaggle or CTR layout)")
     parser.add_argument(
         "--npz-path",
         type=str,
-        required=True,
-        help="Path to the CTR-GCN-style NTU60 .npz file",
+        default="/workspace/data/NTU60/NTU60_CS.npz",
+        help="Path to NTU60_CS.npz (Kaggle one-hot) or CTR-style file",
     )
     parser.add_argument(
         "--epochs",
@@ -133,6 +133,5 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
 

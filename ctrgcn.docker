@@ -2,7 +2,7 @@
 # docker build -f ctrgcn.docker -t ctrgcn .
 # 
 # To run a container:
-# docker run -it --rm --gpus all --shm-size=8g --mount type=bind,source="$HOME/Datasets/NTU60/ctrgcn",target=/workspace/CTR-GCN/data/ntu ctrgcn
+# docker run -it --rm --gpus all --shm-size=8g --mount type=bind,source="$HOME/Datasets/NTU60/kaggle_raw/NTU60_CS.npz",target=/workspace/CTR-GCN/data/ntu/NTU60_CS.npz,readonly ctrgcn
 # 
 # Inside the container:
 # /workspace/CTR-GCN# python main.py --config ./config/nturgbd-cross-subject/default.yaml --work-dir ../work_dir/ctrgcn_ntu60_xsub_joint
@@ -35,11 +35,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /workspace
 
 # ------------------------------------------------------------------
-# Clone CTR-GCN (skeleton-based action recognition, ICCV 2021)
-# ------------------------------------------------------------------
-RUN git clone https://github.com/Uason-Chen/CTR-GCN.git
-
-# ------------------------------------------------------------------
 # Python deps (keep torch from base image)
 # - Use headless OpenCV to reduce image size
 # - Pin numpy conservatively to avoid old code edge cases
@@ -65,6 +60,11 @@ RUN pip install --no-cache-dir \
     h5py \
     "torchpack>=0.3.1" \
     pavi
+
+# ------------------------------------------------------------------
+# Copy local CTR-GCN source into the image (patched config/feeder ready for Kaggle NPZ)
+# ------------------------------------------------------------------
+COPY CTR-GCN /workspace/CTR-GCN
 
 # ------------------------------------------------------------------
 # Install CTR-GCN's local torchlight (and ensure no conflicting one)
@@ -128,4 +128,3 @@ WORKDIR /workspace/CTR-GCN
 
 # Default command: open a shell
 CMD ["/bin/bash"]
-

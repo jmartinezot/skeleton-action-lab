@@ -15,6 +15,7 @@ CTR-GCN, `msg3d.docker` for MS-G3D) while leaving room to add more backbones.
 - [Prerequisites](#-prerequisites)
 - [Data Preparation](#-data-preparation)
 - [Build & Run: CTR-GCN](#-build--run-ctr-gcn)
+- [Build & Run: Baselines](#-build--run-baselines)
 - [Build & Run: MS-G3D](#-build--run-ms-g3d)
 - [Build & Run: FreqMixFormer](#-build--run-freqmixformer)
 - [Build & Run: SkateFormer](#-build--run-skateformer)
@@ -45,10 +46,11 @@ It is also a starting point for research on:
 
 - 🐳 **Docker-based**: reproducible experiments in a single container
 - 🧠 **Model-specific Dockerfiles** (build only what you need):
-  - `ctrgcn.docker` – builds an image tailored for CTR-GCN experiments with preprocessed `.npz` tensors
+  - `ctrgcn.docker` – builds an image tailored for CTR-GCN experiments using the Kaggle `.npz` directly
   - `msg3d.docker` – installs the MS-G3D pipeline (data generation + training) without CTR-GCN extras
   - `freqmixformer.docker` – ships the FreqMixFormer codebase configured to read the shared NTU60 tensors
   - `skateformer.docker` – bundles the SkateFormer transformer that trains directly on the Kaggle NPZ
+  - `baselines.docker` – lightweight sanity checks and toy baselines (MLP, ST-GCN-lite, synthetic benchmarks)
   - Add new Dockerfiles (e.g., `stgcn.docker`, `mim.docker`) as more models are integrated
 - 🧱 Built on **PyTorch 2.3 + CUDA 12.1** runtime
 
@@ -75,9 +77,9 @@ It is also a starting point for research on:
 - **Tools**: Docker (Linux containers), Bash/Python 3
 - **Host paths** (customize as needed):
   - `$HOME/Datasets/NTU60/` – root folder for all NTU RGB+D 60 assets
-  - `$HOME/Datasets/NTU60/kaggle_raw/NTU60_CS.npz` – Kaggle download
-  - `$HOME/Datasets/NTU60/ctrgcn/NTU60_CS.npz` – CTR-GCN layout (can be a symlink to Kaggle raw)
-  - FreqMixFormer reuses the CTR-GCN layout or the Kaggle NPZ; mount `$HOME/Datasets/NTU60` into `/workspace/data/NTU60` for its container
+  - `$HOME/Datasets/NTU60/kaggle_raw/NTU60_CS.npz` – Kaggle download (one file drives all stacks here)
+  - `$HOME/Datasets/NTU60/ctrgcn/NTU60_CS.npz` – optional symlink/copy to the Kaggle file for convenience
+  - FreqMixFormer and CTR-GCN both accept the Kaggle NPZ directly; mount `$HOME/Datasets/NTU60` into `/workspace/data/NTU60` for FreqMixFormer or bind the single file for CTR-GCN
   - `$HOME/MS-G3D_workdir` – writable work directory for MS-G3D runs
 
 ## 📦 Data Preparation
@@ -94,18 +96,18 @@ Datasets/
     ├── skeleton5d/
     │   └── NTU60_CS_skeleton5d.npz
     └── ctrgcn/
-        └── NTU60_CS.npz   (symlink to Kaggle raw is fine)
+        └── NTU60_CS.npz   (symlink/copy to Kaggle raw; optional)
 ```
 
 ### What each format contains
 
 - Kaggle raw (`Datasets/NTU60/kaggle_raw/NTU60_CS.npz`): keys `x_train`, `y_train`, `x_test`, `y_test`. Shapes `x_* = (N, T, D=150)` where `150 = 25 joints × 3 coords (x,y,z) × up to 2 persons` flattened; `y_*` are one-hot class labels (60 classes, cross-subject split). Only 3D joints—no orientations or camera metadata.
-- CTR-GCN layout (`Datasets/NTU60/ctrgcn/NTU60_CS.npz`): converted from Kaggle to `(N, C=3, T, V=25, M=2)` plus integer labels `(N,)` for train/test. Consumed by CTR-GCN and by converters to other layouts.
+- CTR-GCN loader accepts the Kaggle NPZ directly. If you keep a separate path, symlink/copy the Kaggle file to `Datasets/NTU60/ctrgcn/NTU60_CS.npz`.
 - Skeleton5D quickstart (`Datasets/NTU60/skeleton5d/NTU60_CS_skeleton5d.npz`): the same `(N, 3, T, 25, 2)` tensor and labels packaged for toy scripts like `train_skeleton_gcn.py`. Not used by MS-G3D.
 
 All current workflows use only 3D joint coordinates (and labels); hand states, quaternions, and camera metadata from raw `.skeleton` files are not used here.
 
-> FreqMixFormer defaults to the CTR-GCN layout at `/workspace/data/NTU60/ctrgcn/NTU60_CS.npz`, but its loader also accepts the Kaggle one-hot file at `/workspace/data/NTU60/kaggle_raw/NTU60_CS.npz`.
+> FreqMixFormer can read either the Kaggle one-hot file (`/workspace/data/NTU60/kaggle_raw/NTU60_CS.npz`) or a CTR-GCN-path symlink of that file. Point the config to whichever path you mount.
 
 ### Kaggle download
 
@@ -117,14 +119,16 @@ mkdir -p "$HOME/Datasets/NTU60/kaggle_raw"
 cp NTU60_CS.npz "$HOME/Datasets/NTU60/kaggle_raw/"
 ```
 
-### Convert to CTR-GCN layout
+### (Optional) convert to CTR-GCN layout
 
-Convert the Kaggle archive to the `(N, C, T, V, M)` format expected by CTR-GCN (CPU-friendly):
+CTR-GCN and most loaders here can read the Kaggle NPZ directly. If you still want a
+separate CTR-GCN path, you can convert or simply symlink/copy:
 
 ```bash
-python3 convert_ntu60_kaggle_to_ctrgcn.py \
-  --input "$HOME/Datasets/NTU60/kaggle_raw/NTU60_CS.npz" \
-  --output "$HOME/Datasets/NTU60/ctrgcn/NTU60_CS.npz"
+mkdir -p "$HOME/Datasets/NTU60/ctrgcn"
+ln -s "$HOME/Datasets/NTU60/kaggle_raw/NTU60_CS.npz" "$HOME/Datasets/NTU60/ctrgcn/NTU60_CS.npz"
+# or use the converter to rewrite the layout if desired:
+# python3 convert_ntu60_kaggle_to_ctrgcn.py --input "$HOME/Datasets/NTU60/kaggle_raw/NTU60_CS.npz" --output "$HOME/Datasets/NTU60/ctrgcn/NTU60_CS.npz"
 ```
 
 ### Convert to skeleton5d layout (for `train_skeleton_gcn.py`)
@@ -136,11 +140,11 @@ utility:
 ```bash
 docker run -it --rm --gpus all \
   --shm-size=8g \
-  --mount type=bind,source="$HOME/Datasets/NTU60/",target=/workspace/CTR-GCN/data/ntu \
+  --mount type=bind,source="$HOME/Datasets/NTU60/kaggle_raw/NTU60_CS.npz",target=/workspace/CTR-GCN/data/ntu/NTU60_CS.npz,readonly \
   skeleton-lab:ctrgcn
 
 python3 /workspace/scripts/dataset_tools/convert_kaggle_to_skeleton5d.py \
-  --input /workspace/CTR-GCN/data/ntu/ctrgcn/NTU60_CS.npz \
+  --input /workspace/CTR-GCN/data/ntu/NTU60_CS.npz \
   --output /workspace/CTR-GCN/data/ntu/skeleton5d/NTU60_CS_skeleton5d.npz
 ```
 
@@ -155,7 +159,8 @@ python3 /workspace/scripts/train_skeleton_gcn.py \
 ---
 # 🚀 Build & Run: CTR-GCN
 
-CTR-GCN uses preprocessed `.npz` tensors. Use the mount pattern below so `/workspace/CTR-GCN/data/ntu/NTU60_CS.npz` resolves inside the container.
+CTR-GCN can read the Kaggle NTU60 NPZ directly (no extra conversion required). Bind-mount
+the Kaggle file into `/workspace/CTR-GCN/data/ntu/NTU60_CS.npz`.
 
 ### Build image
 
@@ -168,7 +173,7 @@ docker build -t skeleton-lab:ctrgcn -f ctrgcn.docker .
 ```bash
 docker run -it --rm --gpus all \
   --shm-size=8g \
-  --mount type=bind,source="$HOME/Datasets/NTU60/ctrgcn",target=/workspace/CTR-GCN/data/ntu \
+  --mount type=bind,source="$HOME/Datasets/NTU60/kaggle_raw/NTU60_CS.npz",target=/workspace/CTR-GCN/data/ntu/NTU60_CS.npz,readonly \
   skeleton-lab:ctrgcn
 ```
 
@@ -188,6 +193,18 @@ python3 main.py \
   --work-dir ../work_dir/ctrgcn_ntu60_xsub_joint
 ```
 
+Quick smoke/short run example:
+
+```bash
+python3 main.py \
+  --config ./config/nturgbd-cross-subject/default.yaml \
+  --work-dir ../work_dir/ctrgcn_ntu60_xsub_joint_smoke \
+  --num-epoch 1 \
+  --batch-size 8 \
+  --test-batch-size 8 \
+  --num-worker 0
+```
+
 Run lightweight sanity checks (inside the same container):
 
 ```bash
@@ -200,6 +217,46 @@ python3 /workspace/scripts/dataset_tools/inspect_npz.py /workspace/CTR-GCN/data/
 # Toy baselines
 python3 /workspace/scripts/train_npz_mlp.py --npz-path /workspace/CTR-GCN/data/ntu/NTU60_CS.npz --epochs 5 --batch-size 256 --device cuda:0
 ```
+
+# 🚀 Build & Run: Baselines
+
+Baseline scripts (MLP sanity checks, tiny ST-GCN, synthetic benchmarks) live in `baselines/`
+and run off the Kaggle NPZ or synthetic data.
+
+### Build image
+
+```bash
+docker build -t skeleton-lab:baselines -f baselines.docker .
+```
+
+### Run container (mount Kaggle NPZ)
+
+```bash
+docker run -it --rm --gpus all \
+  --shm-size=8g \
+  --mount type=bind,source="$HOME/Datasets/NTU60/kaggle_raw/NTU60_CS.npz",target=/workspace/data/NTU60/NTU60_CS.npz,readonly \
+  skeleton-lab:baselines
+```
+
+Inside the container:
+
+```bash
+# GPU sanity
+python /workspace/baselines/check_gpu.py
+
+# MLP sanity run on Kaggle NPZ
+python /workspace/baselines/train_npz_mlp.py
+
+# Synthetic model timings
+python /workspace/baselines/benchmark_models.py --steps 50 --device cuda:0 --amp
+```
+
+Notes:
+- `train_skeleton_gcn.py` / `train_skeleton_gcn_simple_backbone.py` and the shared dataset
+  now accept Kaggle or CTR layouts directly (the loader reshapes Kaggle `(N, T, 150)` to
+  `(N, 3, T, 25, 2)` and converts one-hot labels).
+- CTR-GCN–specific training loops were moved to `ctrgcn_extras/` and are not part of the
+  baselines image.
 
 # 🚀 Build & Run: MS-G3D
 
@@ -270,7 +327,7 @@ and `--train-window-size 48` (or 32) if VRAM is tight.
 ---
 # 🚀 Build & Run: FreqMixFormer
 
-FreqMixFormer can read either the Kaggle `(N, T, 150)` NTU60 file or the converted CTR-GCN tensor `(N, 3, T, 25, 2)`. The default configs point to the CTR-GCN layout at `/workspace/data/NTU60/ctrgcn/NTU60_CS.npz`.
+FreqMixFormer can read either the Kaggle `(N, T, 150)` NTU60 file or a CTR-GCN-path symlink of that file. Point the config to whichever path you mount.
 
 ### Build image
 
@@ -478,20 +535,19 @@ Docker build for quick access inside containers.
 
 | Script | Purpose |
 |--------|---------|
-| `check_gpu.py` | Print CUDA availability, device count, device name, and PyTorch/CUDA versions. |
-| `dataset_tools/inspect_npz.py` | Dump keys, shapes, and dtypes in an NTU60 `.npz` archive (defaults to `/workspace/CTR-GCN/data/ntu/NTU60_CS.npz`). |
-| `convert_ntu60_kaggle_to_ctrgcn.py` | Convert the Kaggle-style `(N, T, D=150)` file into the `(N, C, T, V, M)` layout used by CTR-GCN. |
+| `baselines/check_gpu.py` | Print CUDA availability, device count, device name, and PyTorch/CUDA versions. |
+| `dataset_tools/inspect_npz.py` | Dump keys, shapes, and dtypes in an NTU60 `.npz` archive (defaults to `/workspace/data/NTU60/NTU60_CS.npz`). |
+| `dataset_tools/convert_kaggle_to_skeleton5d.py` | Convert CTR-layout NPZ to a skeleton5d NPZ for toy GCN scripts. |
 
 ### Baselines and experiments
 
 | Script | Purpose |
 |--------|---------|
-| `skeleton_dataset_ctrgcn.py` | PyTorch `Dataset` for converted skeleton tensors with loader sanity checks. |
-| `train_npz_mlp.py` | Lightweight MLP baseline on the Kaggle `.npz` file (good VRAM/profiling sanity check). |
-| `train_skeleton_gcn.py` | Toy spatio-temporal baseline built on `skeleton_dataset_ctrgcn.py`. |
-| `train_skeleton_gcn_simple_backbone.py` | Simplified backbone variant for quick iterations. |
-| `train_ctrgcn_npz.py` / `train_ctrgcn_npz_full.py` | CTR-GCN training entry points for `.npz` data. |
-| `train_ctrgcn_npz_with_dloader.py` | CTR-GCN training with a data loader abstraction. |
+| `baselines/skeleton_dataset_ctrgcn.py` | PyTorch `Dataset` that auto-detects Kaggle or CTR layouts and reshapes accordingly. |
+| `baselines/train_npz_mlp.py` | Lightweight MLP baseline on the Kaggle `.npz` file (good VRAM/profiling sanity check). |
+| `baselines/train_skeleton_gcn.py` | Toy spatio-temporal baseline built on `skeleton_dataset_ctrgcn.py`. |
+| `baselines/train_skeleton_gcn_simple_backbone.py` | Simplified backbone variant for quick iterations. |
+| `ctrgcn_extras/train_ctrgcn_npz.py` / `train_ctrgcn_npz_full.py` | CTR-GCN-specific training entry points for converted tensors (outside the baselines image). |
 
 ### Benchmarks
 

@@ -1,23 +1,15 @@
 # skeleton_dataset_ctrgcn.py
 """
-PyTorch Dataset for NTU60 skeleton data stored in NTU60_CS_ctrgcn.npz.
+PyTorch Dataset for NTU60 skeleton data stored in either the Kaggle NPZ or
+the CTR-GCN-style NPZ.
 
-Expected NPZ layout (after conversion):
+Accepted layouts:
+- Kaggle: x_* shape (N, T, 150) with one-hot y_* (N, 60)
+- CTR-GCN: x_* shape (N, 3, T, 25, 2) with integer y_* (N,)
 
-    x_train: (N_train, C=3, T, V=25, M=2)
-    y_train: (N_train,)
-    x_test:  (N_test,  C=3, T, V=25, M=2)
-    y_test:  (N_test,)
-
-Where:
-    C = 3   (x, y, z)
-    T = 300 (frames)
-    V = 25  (joints)
-    M = 2   (max persons in frame)
-
-This Dataset returns:
-    x: torch.FloatTensor, shape = (C, T, V, M)
-    y: torch.LongTensor, scalar class index
+Outputs:
+- x: torch.FloatTensor, shape (C=3, T, V=25, M=2)
+- y: torch.LongTensor, scalar class index
 """
 
 from pathlib import Path
@@ -41,7 +33,7 @@ class NTU60SkeletonDataset(Dataset):
     ):
         """
         Args:
-            npz_path: Path to NTU60_CS_ctrgcn.npz
+            npz_path: Path to NTU60_CS.npz (Kaggle layout) or CTR layout
             split: "train" or "test"
             use_both_persons:
                 - If True: keep M=2 persons as-is (shape: C, T, V, M).
@@ -55,21 +47,33 @@ class NTU60SkeletonDataset(Dataset):
         data = np.load(self.npz_path, allow_pickle=True)
 
         if split == "train":
-            self.x = data["x_train"]  # (N, C, T, V, M)
-            self.y = data["y_train"]  # (N,)
+            x = data["x_train"]
+            y = data["y_train"]
         elif split == "test":
-            self.x = data["x_test"]
-            self.y = data["y_test"]
+            x = data["x_test"]
+            y = data["y_test"]
         else:
             raise ValueError(f"Unknown split: {split}, expected 'train' or 'test'")
 
-        if self.x.ndim != 5:
-            raise ValueError(f"Expected x to be 5D (N, C, T, V, M), got {self.x.shape}")
-        if self.y.ndim != 1:
-            raise ValueError(f"Expected y to be 1D (N,), got {self.y.shape}")
+        # Accept Kaggle (N, T, 150) or CTR layout (N, 3, T, 25, 2)
+        if x.ndim == 3 and x.shape[-1] == 150:
+            x = x.reshape(x.shape[0], x.shape[1], 25, 3, 2)            # (N, T, V, C, M)
+            x = np.transpose(x, (0, 3, 1, 2, 4))                       # (N, C, T, V, M)
+            y = y.argmax(axis=1)
+        elif x.ndim == 5:
+            pass
+        else:
+            raise ValueError(f"Unsupported x shape: {x.shape} (expected (N, T, 150) or (N, 3, T, 25, 2))")
+
+        if y.ndim == 2:
+            y = y.argmax(axis=1)
+        if y.ndim != 1:
+            raise ValueError(f"Expected y to be 1D after processing, got {y.shape}")
 
         self.use_both_persons = use_both_persons
         self.transform = transform
+        self.x = x.astype(np.float32, copy=False)
+        self.y = y.astype(np.int64, copy=False)
 
         print(
             f"[NTU60SkeletonDataset] Loaded {split} split from {self.npz_path}:\n"
@@ -103,7 +107,7 @@ def _sanity_check():
     Small self-test you can run directly:
         python skeleton_dataset_ctrgcn.py
     """
-    npz_path = Path("/workspace/CTR-GCN/data/ntu/NTU60_CS_ctrgcn.npz")
+    npz_path = Path("/workspace/data/NTU60/NTU60_CS.npz")
     ds = NTU60SkeletonDataset(npz_path, split="train", use_both_persons=True)
 
     loader = DataLoader(ds, batch_size=8, shuffle=True, num_workers=2, pin_memory=True)
@@ -116,4 +120,3 @@ def _sanity_check():
 
 if __name__ == "__main__":
     _sanity_check()
-

@@ -1,0 +1,74 @@
+# To build this image:
+#   docker build -f baselines.docker -t skeleton-lab:baselines .
+#
+# To run a container (mount Kaggle NPZ for data-driven smoke tests):
+#   docker run -it --rm --gpus all --shm-size=8g \
+#     --mount type=bind,source="$HOME/Datasets/NTU60/kaggle_raw/NTU60_CS.npz",target=/workspace/data/NTU60/NTU60_CS.npz,readonly \
+#     skeleton-lab:baselines
+#
+# Inside the container (examples):
+#   # GPU sanity
+#   python /workspace/baselines/check_gpu.py
+#   # Tiny MLP sanity run on Kaggle NPZ
+#   python /workspace/baselines/train_npz_mlp.py
+#   # Synthetic model timing
+#   python /workspace/baselines/benchmark_models.py --steps 50 --device cuda:0 --amp
+#
+# ============================================================
+# Skeleton Action Lab: Baselines & Checks
+# ============================================================
+
+# Base: PyTorch 2.3 with CUDA 12.1 and cuDNN8 (Ubuntu 22.04 compatible)
+FROM pytorch/pytorch:2.3.0-cuda12.1-cudnn8-runtime
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    TZ=Etc/UTC \
+    PYTHONUNBUFFERED=1
+
+# ------------------------------------------------------------------
+# System dependencies
+# ------------------------------------------------------------------
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    wget \
+    vim \
+    ffmpeg \
+    ca-certificates \
+    build-essential \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+
+# ------------------------------------------------------------------
+# Python deps (keep torch from base image)
+# ------------------------------------------------------------------
+RUN pip install --no-cache-dir \
+    "numpy<2.0" \
+    scipy \
+    tensorboard \
+    tensorboardX \
+    matplotlib \
+    opencv-python-headless \
+    pillow \
+    scikit-learn \
+    tabulate \
+    pyyaml \
+    h5py
+
+# ------------------------------------------------------------------
+# Copy local sources
+# ------------------------------------------------------------------
+COPY baselines /workspace/baselines
+COPY dataset_tools /workspace/dataset_tools
+
+# Optional PYTHONPATH to see baselines
+ENV PYTHONPATH=/workspace/baselines:${PYTHONPATH}
+
+# Create data/work dirs (data usually bind-mounted)
+RUN mkdir -p /workspace/data/NTU60 /workspace/work_dir
+
+# Default working directory inside the container
+WORKDIR /workspace/baselines
+
+# Default command: open a shell
+CMD ["/bin/bash"]
