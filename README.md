@@ -18,7 +18,6 @@ CTR-GCN, `msg3d.docker` for MS-G3D) while leaving room to add more backbones.
 - [Build & Run: MS-G3D](#-build--run-ms-g3d)
 - [Build & Run: FreqMixFormer](#-build--run-freqmixformer)
 - [Build & Run: SkateFormer](#-build--run-skateformer)
-- [Low-memory presets (FreqMixFormer)](#low-memory-preset-smaller-batchwindow)
 - [Helper Scripts & Benchmarks](#-helper-scripts--benchmarks)
 - [Future Work](#-future-work)
 
@@ -363,9 +362,7 @@ python3 main.py \
 
 Use `config/nturgbd-cross-subject/motion.yaml` to train the motion stream. To feed the Kaggle one-hot file directly, change both `data_path` entries in the chosen config to `/workspace/data/NTU60/kaggle_raw/NTU60_CS.npz`; the loader auto-detects layout and label format.
 
-### Low-memory preset (smaller batch/window)
-
-If you encounter GPU OOM, a lighter config is provided:
+**Low-memory option:** If you encounter GPU OOM, a lighter config is provided:
 
 ```bash
 cd /workspace/FreqMixFormer
