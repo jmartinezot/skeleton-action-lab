@@ -28,7 +28,7 @@ Currently included models:
 - **CTR-GCN** (Channel-wise Topology Refinement Graph Convolutional Network, ICCV 2021) – strong, widely used baseline that operates directly on preprocessed `.npz` files
 - **FreqMixFormer** (Frequency Guidance Matters: Skeletal Action Recognition by
 Frequency-Aware Mixed Transformer, ACM MM 2024) – frequency-aware mixed transformer that now reads the same NTU60 tensors (`kaggle_raw` one-hot or converted CTR-GCN 5D)
-- **SkateFormer** (ECCV 2024) – skeletal-temporal transformer that trains directly on the Kaggle-format NTU60 tensor (`NTU60_CS.npz`)
+- **SkateFormer** (SkateFormer: Skeletal-Temporal Transformer for Human Action Recognition, ECCV 2024) – skeletal-temporal transformer that trains directly on the Kaggle-format NTU60 tensor (`NTU60_CS.npz`)
 
 The environment is designed to answer a very practical question:
 
