@@ -1,0 +1,124 @@
+# ============================================================
+# Skeleton Action Lab: SkateFormer (ECCV 2024)
+# ============================================================
+#
+# Build:
+#   docker build -t skeleton-lab:skateformer -f skateformer.docker .
+#
+# Run (mount NTU60 Kaggle file):
+#   docker run -it --rm --gpus all --shm-size=8g \
+#     --mount type=bind,source="$HOME/Datasets/NTU60/kaggle_raw/NTU60_CS.npz",target=/workspace/SkateFormer/data/ntu/NTU60_CS.npz,readonly \
+#     skeleton-lab:skateformer
+#
+# Inside the container (cross-subject, joints):
+#   cd /workspace/SkateFormer
+#   python3 main.py \
+#     --config config/train/ntu_cs/SkateFormer_j.yaml \
+#     --work-dir /workspace/work_dir/skateformer_ntu60_xsub_joint \
+#     --device 0
+
+FROM pytorch/pytorch:2.3.0-cuda12.1-cudnn8-runtime
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    TZ=Etc/UTC \
+    PYTHONUNBUFFERED=1
+
+# ------------------------------------------------------------------
+# System dependencies
+# ------------------------------------------------------------------
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    wget \
+    vim \
+    ffmpeg \
+    ca-certificates \
+    build-essential \
+    libglib2.0-0 \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+
+# ------------------------------------------------------------------
+# Copy SkateFormer code from the build context
+# ------------------------------------------------------------------
+COPY SkateFormer /workspace/SkateFormer
+
+# ------------------------------------------------------------------
+# Python dependencies (torch comes from base image)
+# ------------------------------------------------------------------
+RUN pip install --no-cache-dir \
+    "numpy<2.0" \
+    pyyaml \
+    tqdm \
+    tensorboard \
+    tensorboardX \
+    scikit-learn \
+    matplotlib \
+    opencv-python-headless \
+    scipy \
+    h5py \
+    einops \
+    timm==0.6.12 \
+    tensorpack==0.11 \
+    torchpack==0.2.2 \
+    loguru==0.7.0 \
+    tabulate \
+    safetensors \
+    msgpack \
+    msgpack-numpy \
+    pillow \
+    psutil \
+    packaging \
+    termcolor==2.3.0 \
+    protobuf==3.20.1
+
+# Patch Python 3.10+ compatibility in torchpack (Iterable/Mapping imports) without importing torchpack
+RUN python3 - <<'PY'
+import pathlib
+import site
+
+roots = [pathlib.Path(p) for p in (site.getsitepackages() + [site.getusersitepackages()])]
+pkg = None
+for r in roots:
+    candidate = r / "torchpack"
+    if candidate.exists():
+        pkg = candidate
+        break
+
+if pkg is None:
+    raise SystemExit("torchpack not found in site-packages")
+
+replacements = {
+    'from collections import Iterable': 'from collections.abc import Iterable',
+    'from collections import Mapping': 'from collections.abc import Mapping',
+}
+
+for path in pkg.rglob('*.py'):
+    text = path.read_text()
+    new = text
+    for k, v in replacements.items():
+        new = new.replace(k, v)
+    if new != text:
+        path.write_text(new)
+        print(f'patched {path}')
+
+io_path = pkg / 'io.py'
+if io_path.exists():
+    txt = io_path.read_text()
+    if 'from torchvision.models.resnet import model_urls' in txt:
+        txt = txt.replace('from torchvision.models.resnet import model_urls', "model_urls = {}  # patched: removed in newer torchvision")
+        io_path.write_text(txt)
+        print(f'patched {io_path} (model_urls import)')
+PY
+# Make local modules importable
+ENV PYTHONPATH=/workspace/SkateFormer:${PYTHONPATH}
+
+# Install local torchlight (provides DictAction, logger, etc.)
+RUN pip install --no-cache-dir -e /workspace/SkateFormer/torchlight
+
+# Create common mount points
+RUN mkdir -p /workspace/data/NTU60 /workspace/work_dir /workspace/SkateFormer/data/ntu
+
+WORKDIR /workspace/SkateFormer
+
+CMD ["/bin/bash"]

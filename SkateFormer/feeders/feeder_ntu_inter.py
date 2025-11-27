@@ -129,7 +129,7 @@ class Feeder(Dataset):
                 data_adain = self.data[adain_idx]
                 data_adain = np.array(data_adain)
                 f_num = np.sum(data_adain.sum(0).sum(-1).sum(-1) != 0)
-                t_idx = np.round((index_t + 1) * f_num / 2).astype(np.int)
+                t_idx = np.round((index_t + 1) * f_num / 2).astype(np.int64)
                 data_adain = data_adain[:, t_idx]
                 data_numpy = tools.skeleton_adain_bone_length(data_numpy, data_adain)
 
@@ -166,4 +166,3 @@ def import_class(name):
     for comp in components[1:]:
         mod = getattr(mod, comp)
     return mod
-

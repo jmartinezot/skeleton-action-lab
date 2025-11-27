@@ -17,6 +17,7 @@ CTR-GCN, `msg3d.docker` for MS-G3D) while leaving room to add more backbones.
 - [Build & Run: CTR-GCN](#-build--run-ctr-gcn)
 - [Build & Run: MS-G3D](#-build--run-ms-g3d)
 - [Build & Run: FreqMixFormer](#-build--run-freqmixformer)
+- [Build & Run: SkateFormer](#-build--run-skateformer)
 - [Low-memory presets (FreqMixFormer)](#low-memory-preset-smaller-batchwindow)
 - [Helper Scripts & Benchmarks](#-helper-scripts--benchmarks)
 - [Future Work](#-future-work)
@@ -27,6 +28,7 @@ Currently included models:
 - **CTR-GCN** (Channel-wise Topology Refinement Graph Convolutional Network, ICCV 2021) – strong, widely used baseline that operates directly on preprocessed `.npz` files
 - **FreqMixFormer** (Frequency Guidance Matters: Skeletal Action Recognition by
 Frequency-Aware Mixed Transformer, ACM MM 2024) – frequency-aware mixed transformer that now reads the same NTU60 tensors (`kaggle_raw` one-hot or converted CTR-GCN 5D)
+- **SkateFormer** (ECCV 2024) – skeletal-temporal transformer that trains directly on the Kaggle-format NTU60 tensor (`NTU60_CS.npz`)
 
 The environment is designed to answer a very practical question:
 
@@ -383,6 +385,149 @@ python3 main.py \
   --work-dir /workspace/work_dir/freqmixformer_ntu60_xsub_motion_lowmem \
   --device 0
 ```
+
+---
+# 🚀 Build & Run: SkateFormer
+
+SkateFormer consumes the Kaggle-format NTU60 archive (`NTU60_CS.npz` with `x_train/x_test/y_train/y_test`) and aligns with the same PyTorch 2.3 / CUDA 12.1 base as the other stacks.
+
+### Build image
+
+```bash
+docker build -t skeleton-lab:skateformer -f skateformer.docker .
+```
+
+### Run container
+
+Mount the Kaggle NTU60 file directly into the expected path under `SkateFormer/data/ntu`:
+
+```bash
+docker run -it --rm --gpus all \
+  --shm-size=8g \
+  --mount type=bind,source="$HOME/Datasets/NTU60/kaggle_raw/NTU60_CS.npz",target=/workspace/SkateFormer/data/ntu/NTU60_CS.npz,readonly \
+  skeleton-lab:skateformer
+```
+
+### Example training command (cross-subject, joint modality)
+
+Inside the container:
+
+```bash
+cd /workspace/SkateFormer
+python3 main.py \
+  --config ./config/train/ntu_cs/SkateFormer_j.yaml \
+  --work-dir /workspace/work_dir/skateformer_ntu60_xsub_joint \
+  --device 0
+```
+
+For the bone modality, swap to `./config/train/ntu_cs/SkateFormer_b.yaml`. Other upstream configs (NTU-Inter, NTU120, NW-UCLA) are available if you mount the corresponding raw datasets in their expected layouts under `/workspace/SkateFormer/data/`.
+
+> ℹ️ SkateFormer expects the Kaggle layout (flattened joints + one-hot labels) by default; no conversion to the CTR-GCN tensor is required for NTU60.
+
+### SkateFormer presets and tips
+
+- Default: batch 128, window 64, heads 32, workers 4 (`SkateFormer_j.yaml`)
+- Lowmem: batch 32, window 48, heads 16, workers 0 (`SkateFormer_j_lowmem.yaml`)
+- Tiny: batch 8, window 32, heads 8, workers 0, smaller partitions (`SkateFormer_j_tiny.yaml`)
+
+If you see CUDA OOM, shrink the workload in `config/train/ntu_cs/SkateFormer_j.yaml` and the matching test config:
+
+- Lower `batch_size` and `test_batch_size` (e.g., 32 or 16 instead of 128).
+- Reduce `window_size` in both `train_feeder_args` and `test_feeder_args` (e.g., 48 or 32).
+- Drop DataLoader workers: set `num_worker: 0` to trim host RAM and worker overhead.
+- If still tight, trim the model heads: set `num_heads` to 16 or 8 in `model_args` (accuracy may drop).
+- Keep `--shm-size=8g` on the container; if shared memory is scarce, lower workers further.
+
+Quick low-memory override example (after editing the YAML as above):
+
+```bash
+docker run -it --rm --gpus all --shm-size=8g \
+  --mount type=bind,source="$HOME/Datasets/NTU60/kaggle_raw/NTU60_CS.npz",target=/workspace/SkateFormer/data/ntu/NTU60_CS.npz,readonly \
+  skeleton-lab:skateformer
+
+# inside
+cd /workspace/SkateFormer
+python3 main.py \
+  --config ./config/train/ntu_cs/SkateFormer_j.yaml \
+  --work-dir /workspace/work_dir/skateformer_ntu60_xsub_joint_lowmem \
+  --device 0
+```
+
+Alternatively, use the prewritten low-memory configs:
+
+```bash
+# train (low-memory)
+python3 main.py \
+  --config ./config/train/ntu_cs/SkateFormer_j_lowmem.yaml \
+  --work-dir /workspace/work_dir/skateformer_ntu60_xsub_joint_lowmem \
+  --device 0
+
+# test/eval (low-memory)
+python3 main.py \
+  --config ./config/test/ntu_cs/SkateFormer_j_lowmem.yaml \
+  --device 0
+```
+
+If VRAM is still tight, use the ultra-small “tiny” configs (batch 8, window 32, heads 8):
+
+```bash
+# train (tiny)
+python3 main.py \
+  --config ./config/train/ntu_cs/SkateFormer_j_tiny.yaml \
+  --work-dir /workspace/work_dir/skateformer_ntu60_xsub_joint_tiny \
+  --device 0
+
+# test/eval (tiny)
+python3 main.py \
+  --config ./config/test/ntu_cs/SkateFormer_j_tiny.yaml \
+  --device 0
+```
+
+The tiny configs also shrink partition sizes (`type_1_size` etc.) to avoid invalid reshapes when the temporal length is very short after cropping/downsampling.
+
+You can also override YAML values directly from the CLI (the parser loads the YAML, then any `--flag` you pass wins). Examples:
+
+```bash
+# Use the standard config but override memory-heavy pieces inline
+python3 main.py \
+  --config ./config/train/ntu_cs/SkateFormer_j.yaml \
+  --work-dir /workspace/work_dir/skateformer_custom \
+  --batch-size 8 --test-batch-size 8 --num-worker 0 \
+  --train-feeder-args "{'window_size':32,'thres':32}" \
+  --test-feeder-args "{'window_size':32,'thres':32}" \
+  --model-args "{'num_heads':8,'drop_path':0.05,'type_1_size':[4,6],'type_2_size':[4,8],'type_3_size':[4,6],'type_4_size':[4,8]}"
+
+# Fully CLI-driven (no YAML) — verbose but possible
+python3 main.py \
+  --phase train \
+  --work-dir /workspace/work_dir/skateformer_full_cli \
+  --feeder feeders.feeder_ntu.Feeder \
+  --train-feeder-args "{'data_path':'./data/ntu/NTU60_CS.npz','split':'train','window_size':32,'p_interval':[0.5,0.75],'thres':32,'uniform':True,'partition':True}" \
+  --test-feeder-args "{'data_path':'./data/ntu/NTU60_CS.npz','split':'test','window_size':32,'p_interval':[0.95],'thres':32,'uniform':True,'partition':True}" \
+  --model model.SkateFormer.SkateFormer_ \
+  --model-args "{'num_classes':60,'num_people':2,'num_points':24,'kernel_size':7,'num_heads':8,'drop_path':0.05,'type_1_size':[4,6],'type_2_size':[4,8],'type_3_size':[4,6],'type_4_size':[4,8],'mlp_ratio':4.0,'index_t':True}" \
+  --batch-size 8 --test-batch-size 8 --num-worker 0 --num-epoch 500 \
+  --optimizer AdamW --base-lr 1e-3 --loss-type LSCE
+
+# Quickly shorten training for smoke tests
+python3 main.py \
+  --config ./config/train/ntu_cs/SkateFormer_j_tiny.yaml \
+  --work-dir /workspace/work_dir/skateformer_ntu60_xsub_joint_tiny_smoke \
+  --num-epoch 5 \
+  --device 0
+
+# Quick eval (tiny preset; requires a weights path)
+python3 main.py \
+  --phase test \
+  --config ./config/test/ntu_cs/SkateFormer_j_tiny.yaml \
+  --weights /workspace/work_dir/skateformer_ntu60_xsub_joint_tiny_smoke/runs-5-XXXX.pt \
+  --device 0 \
+  --test-batch-size 8
+```
+
+Any flag you pass on the CLI overrides the YAML value, so you can mix and match (e.g., `--batch-size 4 --train-feeder-args "{'window_size':24,'thres':24}"`).
+
+> ℹ️ Saved checkpoints are named `runs-{epoch}-{global_step}.pt` (e.g., `runs-1-5011.pt` for a 1-epoch run with 5,011 batches). Adjust the `--weights` path in the test command to the actual filename produced in your `work_dir`.
 
 ---
 
