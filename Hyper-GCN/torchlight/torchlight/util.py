@@ -13,7 +13,20 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.autograd import Variable
-from torchpack.runner.hooks import PaviLogger
+
+# Torchpack is optional; some versions break on Python 3.10+. Fall back to a no-op logger.
+try:
+    from torchpack.runner.hooks import PaviLogger
+except Exception:  # pragma: no cover - only used when torchpack is missing/broken
+    class PaviLogger:  # type: ignore
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def connect(self, *args, **kwargs):
+            return self
+
+        def log(self, *args, **kwargs):
+            return None
 
 
 class IO():

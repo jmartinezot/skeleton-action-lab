@@ -235,10 +235,14 @@ class Processor():
 
     def __init__(self, arg):
         self.arg = arg
+        # Use work_dir/runs as default save prefix so debug runs still persist checkpoints.
+        if not getattr(self.arg, 'model_saved_name', None):
+            self.arg.model_saved_name = os.path.join(self.arg.work_dir, 'runs')
         self.save_arg()
         if arg.phase == 'train':
             if not arg.train_feeder_args['debug']:
-                arg.model_saved_name = os.path.join(arg.work_dir, 'runs')
+                if not arg.model_saved_name:
+                    arg.model_saved_name = os.path.join(arg.work_dir, 'runs')
                 if os.path.isdir(arg.model_saved_name):
                     print('log_dir: ', arg.model_saved_name, 'already exist')
                     answer = input('delete it? y/n:')
@@ -262,8 +266,8 @@ class Processor():
             self.load_optimizer()
             self.load_data()
         self.lr = self.arg.base_lr
-        self.best_acc = 0
-        self.best_acc_epoch = 0
+        self.best_acc = float('-inf')
+        self.best_acc_epoch = None
 
         self.model = self.model.cuda(self.output_device)
 
@@ -551,7 +555,15 @@ class Processor():
                 self.eval(epoch, save_score=self.arg.save_score, loader_name=['test'])
 
             # test the best model
-            weights_path = glob.glob(os.path.join(self.arg.work_dir, 'runs-'+str(self.best_acc_epoch)+'*'))[0]
+            weights_path = None
+            if self.best_acc_epoch is not None:
+                pattern = f'{self.arg.model_saved_name}-{self.best_acc_epoch}-*.pt'
+                candidates = glob.glob(pattern)
+                if candidates:
+                    weights_path = sorted(candidates)[-1]
+            if weights_path is None:
+                self.print_log('No saved weights found for the best epoch; skipping final evaluation.')
+                return
             weights = torch.load(weights_path)
             if type(self.arg.device) is list:
                 if len(self.arg.device) > 1:
