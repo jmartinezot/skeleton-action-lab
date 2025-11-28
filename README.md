@@ -21,6 +21,7 @@ CTR-GCN, `msg3d.docker` for MS-G3D) while leaving room to add more backbones.
 - [Build & Run: SkateFormer](#-build--run-skateformer)
 - [Build & Run: Hyper-GCN](#-build--run-hyper-gcn)
 - [Build & Run: FS-VAE](#-build--run-fs-vae)
+- [Build & Run: MSF-GZSSAR](#-build--run-msf-gzssar)
 - [Helper Scripts & Benchmarks](#-helper-scripts--benchmarks)
 - [Future Work](#-future-work)
 
@@ -660,6 +661,73 @@ python3 train.py \
 
 ```bash
 cd /workspace/FS-VAE
+python3 smoke_test.py --device cpu
+```
+
+This only exercises the encoders/decoders on random tensors and does not read any data files.
+
+---
+# 🚀 Build & Run: MSF-GZSSAR
+
+MSF-GZSSAR is the ICIG 2023 generalized zero-shot baseline (multi-semantic fusion). It uses the same type of precomputed skeleton/text features as FS-VAE.
+
+### Build image
+
+```bash
+docker build -t skeleton-lab:msf-gzssar -f msf-gzssar.docker .
+```
+
+### Prepare data (host)
+
+Place the MSF assets under `/home/datasets/NTU60/msf` (adjust if you use a different root):
+
+```text
+/home/datasets/NTU60/msf/
+├── sk_feats/
+│   ├── shift_5_r/
+│   │   ├── train.npy
+│   │   ├── train_label.npy
+│   │   ├── ztest.npy
+│   │   ├── z_label.npy
+│   │   ├── gtest.npy or val.npy (split-dependent)
+│   │   └── g_label.npy or val_label.npy
+│   └── shift_val_5_r/ ... (validation split used by run60.sh)
+├── text_feats/
+│   └── ViT-B/32/ (or ViT-B/16/)
+│       ├── lb_60.npy
+│       ├── ad_60.npy
+│       └── md_60.npy
+└── results/            # writable output directory
+```
+
+- Generate text features with `gen_text_feat.py` (downloads CLIP weights) or place the `.npy` files under `text_feats/ViT-B/32`. You can mount a CLIP weights cache (e.g., `/home/weights/CLIP`) into `text_extractor` to avoid downloads.
+
+### Run container
+
+```bash
+docker run -it --rm --gpus all --shm-size=8g \
+  --mount type=bind,source=/home/datasets/NTU60/msf/sk_feats,target=/workspace/MSF-GZSSAR/sk_feats,readonly \
+  --mount type=bind,source=/home/datasets/NTU60/msf/text_feats,target=/workspace/MSF-GZSSAR/text_feats,readonly \
+  --mount type=bind,source=/home/datasets/NTU60/msf/results,target=/workspace/MSF-GZSSAR/results \
+  --mount type=bind,source=/home/weights/CLIP,target=/workspace/MSF-GZSSAR/text_extractor,readonly \
+  skeleton-lab:msf-gzssar
+```
+
+### Example training command (NTU-60 full pipeline)
+
+Inside the container:
+
+```bash
+cd /workspace/MSF-GZSSAR
+bash run60.sh
+```
+
+Swap to `run120.sh` and the corresponding feature folders for NTU-120.
+
+### Quick smoke test (no dataset needed)
+
+```bash
+cd /workspace/MSF-GZSSAR
 python3 smoke_test.py --device cpu
 ```
 

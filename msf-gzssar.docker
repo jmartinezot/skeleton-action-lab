@@ -1,0 +1,67 @@
+# ============================================================
+# Skeleton Action Lab: MSF-GZSSAR (ICIG 2023)
+# ============================================================
+#
+# Build:
+#   docker build -t skeleton-lab:msf-gzssar -f msf-gzssar.docker .
+#
+# Run (mount precomputed skeleton/text features and results; optional CLIP weights cache):
+#   docker run -it --rm --gpus all --shm-size=8g \
+#     --mount type=bind,source=/home/datasets/NTU60/msf/sk_feats,target=/workspace/MSF-GZSSAR/sk_feats,readonly \
+#     --mount type=bind,source=/home/datasets/NTU60/msf/text_feats,target=/workspace/MSF-GZSSAR/text_feats,readonly \
+#     --mount type=bind,source=/home/datasets/NTU60/msf/results,target=/workspace/MSF-GZSSAR/results \
+#     --mount type=bind,source=/home/weights/CLIP,target=/workspace/MSF-GZSSAR/text_extractor,readonly \
+#     skeleton-lab:msf-gzssar
+#
+# Inside the container (NTU-60 full pipeline):
+#   cd /workspace/MSF-GZSSAR
+#   bash run60.sh
+#
+# Quick smoke test (no dataset needed):
+#   python3 smoke_test.py --device cpu
+
+FROM pytorch/pytorch:2.3.0-cuda12.1-cudnn8-runtime
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    TZ=Etc/UTC \
+    PYTHONUNBUFFERED=1
+
+# ------------------------------------------------------------------
+# System dependencies
+# ------------------------------------------------------------------
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    wget \
+    vim \
+    ca-certificates \
+    build-essential \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+
+# ------------------------------------------------------------------
+# Copy MSF-GZSSAR source
+# ------------------------------------------------------------------
+COPY MSF-GZSSAR /workspace/MSF-GZSSAR
+
+# ------------------------------------------------------------------
+# Python dependencies (torch/torchvision come from the base image)
+# ------------------------------------------------------------------
+RUN pip install --no-cache-dir \
+    "numpy<2.0" \
+    h5py \
+    scikit-learn \
+    tqdm
+
+# Make local modules importable
+ENV PYTHONPATH=/workspace/MSF-GZSSAR:${PYTHONPATH}
+
+# Create common mount points
+RUN mkdir -p \
+    /workspace/MSF-GZSSAR/sk_feats \
+    /workspace/MSF-GZSSAR/text_feats \
+    /workspace/MSF-GZSSAR/results
+
+WORKDIR /workspace/MSF-GZSSAR
+
+CMD ["/bin/bash"]
