@@ -91,7 +91,7 @@ in the commands below. Keep raw downloads and converted formats together so each
 reuse the same source files.
 
 ```text
-Datasets/
+datasets/
 └── NTU60/
     ├── kaggle_raw/
     │   └── NTU60_CS.npz
