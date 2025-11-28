@@ -1,6 +1,56 @@
 # Hyper-GCN
 This repo is the official implementation for [Adaptive Hyper-Graph Convolution Network for Skeleton-based Human Action Recognition with Virtual Connections](https://arxiv.org/pdf/2411.14796). The paper is accepted to ICCV 2025 :tada::tada::tada:
 
+> This fork is wired into the Skeleton Action Lab environment. The data loader now
+> reads the Kaggle NTU60 NPZ directly (`x_train/x_test` with one-hot labels), ships
+> with a Dockerfile (`hypergcn.docker`), and includes a quick smoke test.
+
+## Quickstart (NTU60 Kaggle NPZ)
+
+1) Place the Kaggle download at `Hyper-GCN/data/NTU60_CS.npz` (or bind-mount it in
+   Docker to the same path).
+2) Train the joint modality on the cross-subject split:
+
+```bash
+cd /workspace/Hyper-GCN
+python3 main.py \
+  --config config/base/nturgbd-cross-subject/hyper_joint.yaml \
+  --work-dir /workspace/work_dir/hypergcn_ntu60_xsub_joint \
+  --device 0
+```
+
+3) Run a fast smoke test (1 epoch, 100 samples, small batches):
+
+```bash
+python3 main.py \
+  --config config/kaggle/nturgbd-cross-subject/hyper_joint_smoke.yaml \
+  --work-dir /workspace/work_dir/hypergcn_ntu60_xsub_joint_smoke \
+  --device 0
+```
+
+Alternatively, the standalone sanity script exercises a single forward/backward step:
+
+```bash
+python3 smoke_test_kaggle.py --device cuda:0 --batch-size 2 --window-size 48
+```
+
+## Docker
+
+Build the Hyper-GCN image (PyTorch 2.3, CUDA 12.1):
+
+```bash
+docker build -t skeleton-lab:hypergcn -f hypergcn.docker .
+```
+
+Run with the Kaggle NPZ mounted:
+
+```bash
+docker run -it --rm --gpus all --shm-size=8g \
+  --mount type=bind,source="$HOME/Datasets/NTU60/kaggle_raw/NTU60_CS.npz",target=/workspace/Hyper-GCN/data/NTU60_CS.npz,readonly \
+  --mount type=bind,source="$HOME/work_dir/hypergcn",target=/workspace/work_dir \
+  skeleton-lab:hypergcn
+```
+
 # Illustration
 <div align='center'>
    <img src="./assets/illustration.png" width="500"/><br>

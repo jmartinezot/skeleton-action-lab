@@ -19,6 +19,7 @@ CTR-GCN, `msg3d.docker` for MS-G3D) while leaving room to add more backbones.
 - [Build & Run: MS-G3D](#-build--run-ms-g3d)
 - [Build & Run: FreqMixFormer](#-build--run-freqmixformer)
 - [Build & Run: SkateFormer](#-build--run-skateformer)
+- [Build & Run: Hyper-GCN](#-build--run-hyper-gcn)
 - [Helper Scripts & Benchmarks](#-helper-scripts--benchmarks)
 - [Future Work](#-future-work)
 
@@ -29,6 +30,7 @@ Currently included models:
 - **FreqMixFormer** (Frequency Guidance Matters: Skeletal Action Recognition by
 Frequency-Aware Mixed Transformer, ACM MM 2024) – frequency-aware mixed transformer that now reads the same NTU60 tensors (`kaggle_raw` one-hot or converted CTR-GCN 5D)
 - **SkateFormer** (SkateFormer: Skeletal-Temporal Transformer for Human Action Recognition, ECCV 2024) – skeletal-temporal transformer that trains directly on the Kaggle-format NTU60 tensor (`NTU60_CS.npz`)
+- **Hyper-GCN** (Adaptive Hyper-Graph Convolution Network, ICCV 2025) – hyper-graph GCN wired to the Kaggle NPZ with joint/bone/velocity modalities
 
 The environment is designed to answer a very practical question:
 
@@ -76,19 +78,20 @@ It is also a starting point for research on:
 - **Drivers/Runtime**: NVIDIA drivers + `nvidia-container-toolkit` configured for Docker
 - **Tools**: Docker (Linux containers), Bash/Python 3
 - **Host paths** (customize as needed):
-  - `$HOME/Datasets/NTU60/` – root folder for all NTU RGB+D 60 assets
-  - `$HOME/Datasets/NTU60/kaggle_raw/NTU60_CS.npz` – Kaggle download (one file drives all stacks here)
-  - FreqMixFormer and CTR-GCN both accept the Kaggle NPZ directly; mount `$HOME/Datasets/NTU60` into `/workspace/data/NTU60` for FreqMixFormer or bind the single file for CTR-GCN
+  - `/home/datasets/NTU60/` – root folder for all NTU RGB+D 60 assets
+  - `/home/datasets/NTU60/kaggle_raw/NTU60_CS.npz` – Kaggle download (one file drives all stacks here)
+  - FreqMixFormer and CTR-GCN both accept the Kaggle NPZ directly; mount `/home/datasets/NTU60` into `/workspace/data/NTU60` for FreqMixFormer or bind the single file for CTR-GCN
   - `$HOME/MS-G3D_workdir` – writable work directory for MS-G3D runs
 
 ## 📦 Data Preparation
 
-The experiments expect the NTU RGB+D 60 dataset to live outside the container in
-`$HOME/Datasets/NTU60`. Keep raw downloads and converted formats together so each model can
+The documentation assumes the NTU RGB+D 60 dataset lives outside the container at
+`/home/datasets/NTU60`. If your data sits elsewhere, adjust the host paths and bind mounts
+in the commands below. Keep raw downloads and converted formats together so each model can
 reuse the same source files.
 
 ```text
-Datasets/
+datasets/
 └── NTU60/
     ├── kaggle_raw/
     │   └── NTU60_CS.npz
@@ -108,11 +111,11 @@ All current workflows use only 3D joint coordinates (and labels); hand states, q
 ### Kaggle download
 
 - Download `NTU60_CS.npz` from Kaggle: https://www.kaggle.com/datasets/jarex616/ntu-rgb-d-60-skeleton-data-npz
-- Place it at `$HOME/Datasets/NTU60/kaggle_raw/NTU60_CS.npz`.
+- Place it at `/home/datasets/NTU60/kaggle_raw/NTU60_CS.npz`.
 
 ```bash
-mkdir -p "$HOME/Datasets/NTU60/kaggle_raw"
-cp NTU60_CS.npz "$HOME/Datasets/NTU60/kaggle_raw/"
+mkdir -p /home/datasets/NTU60/kaggle_raw
+cp NTU60_CS.npz /home/datasets/NTU60/kaggle_raw/
 ```
 
 ### Convert to skeleton5d layout (for `train_skeleton_gcn.py`)
@@ -124,7 +127,7 @@ utility:
 ```bash
 docker run -it --rm --gpus all \
   --shm-size=8g \
-  --mount type=bind,source="$HOME/Datasets/NTU60/kaggle_raw/NTU60_CS.npz",target=/workspace/CTR-GCN/data/ntu/NTU60_CS.npz,readonly \
+  --mount type=bind,source=/home/datasets/NTU60/kaggle_raw/NTU60_CS.npz,target=/workspace/CTR-GCN/data/ntu/NTU60_CS.npz,readonly \
   skeleton-lab:ctrgcn
 
 python3 /workspace/scripts/dataset_tools/convert_kaggle_to_skeleton5d.py \
@@ -157,7 +160,7 @@ docker build -t skeleton-lab:baselines -f baselines.docker .
 ```bash
 docker run -it --rm --gpus all \
   --shm-size=8g \
-  --mount type=bind,source="$HOME/Datasets/NTU60/kaggle_raw/NTU60_CS.npz",target=/workspace/data/NTU60/NTU60_CS.npz,readonly \
+  --mount type=bind,source=/home/datasets/NTU60/kaggle_raw/NTU60_CS.npz,target=/workspace/data/NTU60/NTU60_CS.npz,readonly \
   skeleton-lab:baselines
 ```
 
@@ -197,7 +200,7 @@ docker build -t skeleton-lab:ctrgcn -f ctrgcn.docker .
 ```bash
 docker run -it --rm --gpus all \
   --shm-size=8g \
-  --mount type=bind,source="$HOME/Datasets/NTU60/kaggle_raw/NTU60_CS.npz",target=/workspace/CTR-GCN/data/ntu/NTU60_CS.npz,readonly \
+  --mount type=bind,source=/home/datasets/NTU60/kaggle_raw/NTU60_CS.npz,target=/workspace/CTR-GCN/data/ntu/NTU60_CS.npz,readonly \
   skeleton-lab:ctrgcn
 ```
 
@@ -245,7 +248,7 @@ docker build -t skeleton-lab:baselines -f baselines.docker .
 ```bash
 docker run -it --rm --gpus all \
   --shm-size=8g \
-  --mount type=bind,source="$HOME/Datasets/NTU60/kaggle_raw/NTU60_CS.npz",target=/workspace/data/NTU60/NTU60_CS.npz,readonly \
+  --mount type=bind,source=/home/datasets/NTU60/kaggle_raw/NTU60_CS.npz,target=/workspace/data/NTU60/NTU60_CS.npz,readonly \
   skeleton-lab:baselines
 ```
 
@@ -284,7 +287,7 @@ docker build -t skeleton-lab:msg3d -f msg3d.docker .
 ```bash
 docker run -it --rm --gpus all \
   --shm-size=8g \
-  --mount type=bind,source="$HOME/Datasets/NTU60/kaggle_raw/NTU60_CS.npz",target=/workspace/MS-G3D/data/ntu/NTU60_CS.npz,readonly \
+  --mount type=bind,source=/home/datasets/NTU60/kaggle_raw/NTU60_CS.npz,target=/workspace/MS-G3D/data/ntu/NTU60_CS.npz,readonly \
   skeleton-lab:msg3d
 ```
 
@@ -353,7 +356,7 @@ This image installs the bundled `torchlight` package from `FreqMixFormer/torchli
 ```bash
 docker run -it --rm --gpus all \
   --shm-size=8g \
-  --mount type=bind,source="$HOME/Datasets/NTU60",target=/workspace/data/NTU60,readonly \
+  --mount type=bind,source=/home/datasets/NTU60,target=/workspace/data/NTU60,readonly \
   skeleton-lab:freqmixformer
 ```
 
@@ -410,7 +413,7 @@ Mount the Kaggle NTU60 file directly into the expected path under `SkateFormer/d
 ```bash
 docker run -it --rm --gpus all \
   --shm-size=8g \
-  --mount type=bind,source="$HOME/Datasets/NTU60/kaggle_raw/NTU60_CS.npz",target=/workspace/SkateFormer/data/ntu/NTU60_CS.npz,readonly \
+  --mount type=bind,source=/home/datasets/NTU60/kaggle_raw/NTU60_CS.npz,target=/workspace/SkateFormer/data/ntu/NTU60_CS.npz,readonly \
   skeleton-lab:skateformer
 ```
 
@@ -448,7 +451,7 @@ Quick low-memory override example (after editing the YAML as above):
 
 ```bash
 docker run -it --rm --gpus all --shm-size=8g \
-  --mount type=bind,source="$HOME/Datasets/NTU60/kaggle_raw/NTU60_CS.npz",target=/workspace/SkateFormer/data/ntu/NTU60_CS.npz,readonly \
+  --mount type=bind,source=/home/datasets/NTU60/kaggle_raw/NTU60_CS.npz,target=/workspace/SkateFormer/data/ntu/NTU60_CS.npz,readonly \
   skeleton-lab:skateformer
 
 # inside
@@ -534,6 +537,58 @@ python3 main.py \
 Any flag you pass on the CLI overrides the YAML value, so you can mix and match (e.g., `--batch-size 4 --train-feeder-args "{'window_size':24,'thres':24}"`).
 
 > ℹ️ Saved checkpoints are named `runs-{epoch}-{global_step}.pt` (e.g., `runs-1-5011.pt` for a 1-epoch run with 5,011 batches). Adjust the `--weights` path in the test command to the actual filename produced in your `work_dir`.
+
+---
+# 🚀 Build & Run: Hyper-GCN
+
+Hyper-GCN now reads the Kaggle NTU60 NPZ directly (`x_train/x_test` one-hot). Mount the Kaggle file into `Hyper-GCN/data/NTU60_CS.npz` inside the container.
+
+### Build image
+
+```bash
+docker build -t skeleton-lab:hypergcn -f hypergcn.docker .
+```
+
+### Run container
+
+```bash
+docker run -it --rm --gpus all --shm-size=8g \
+  --mount type=bind,source=/home/datasets/NTU60/kaggle_raw/NTU60_CS.npz,target=/workspace/Hyper-GCN/data/NTU60_CS.npz,readonly \
+  --mount type=bind,source="$HOME/work_dir/hypergcn",target=/workspace/work_dir \
+  skeleton-lab:hypergcn
+```
+
+### Example training command (cross-subject, joint modality)
+
+```bash
+cd /workspace/Hyper-GCN
+python3 main.py \
+  --config config/base/nturgbd-cross-subject/hyper_joint.yaml \
+  --work-dir /workspace/work_dir/hypergcn_ntu60_xsub_joint \
+  --device 0
+```
+
+Swap to `hyper_bone.yaml` or `hyper_joint_motion.yaml` for the other modalities. If host memory is tight, drop data loader workers: `--num-worker 0`.
+
+### Quick smoke test
+
+Short sanity run using the debug subset (first 100 samples), smaller windows, and 1 epoch:
+
+```bash
+cd /workspace/Hyper-GCN
+python3 main.py \
+  --config config/kaggle/nturgbd-cross-subject/hyper_joint_smoke.yaml \
+  --work-dir /workspace/work_dir/hypergcn_ntu60_xsub_joint_smoke \
+  --device 0
+```
+
+For an even faster check (single forward/backward step), run:
+
+```bash
+python3 smoke_test_kaggle.py --device cuda:0 --batch-size 2 --window-size 48
+```
+
+The feeder auto-converts Kaggle one-hot labels to class indices and reshapes `(N, T, 150)` to `(N, 3, T, 25, 2)`.
 
 ---
 

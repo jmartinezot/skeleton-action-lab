@@ -1,3 +1,4 @@
+import os
 import numpy as np
 
 from torch.utils.data import Dataset
@@ -11,8 +12,8 @@ class Feeder(Dataset):
                  random_move=False, random_rot=False, frame_sample='resize', align=False, spatial_flip=False, drop_joint=False,
                  drop_axis=False, window_size=-1, normalization=False, debug=False, use_mmap=False, bone=False, vel=False):
         """
-        :param data_path:
-        :param label_path:
+        :param data_path: Path to data (.npz from Kaggle with x_train/x_test or CTR-style .npy).
+        :param label_path: Optional label file for non-Kaggle layouts.
         :param split: training set or test set
         :param random_choose: If true, randomly choose a portion of the input sequence
         :param random_shift: If true, randomly pad zeros at the begining or end of sequence
@@ -51,21 +52,56 @@ class Feeder(Dataset):
         if normalization:
             self.get_mean_map()
 
+    @staticmethod
+    def _convert_labels(raw_label):
+        if raw_label.ndim == 2:
+            return np.where(raw_label > 0)[1]
+        if raw_label.ndim == 1:
+            return raw_label
+        raise ValueError(f'Unsupported label shape: {raw_label.shape}')
+
+    @staticmethod
+    def _reshape_kaggle(x):
+        if x.ndim != 3:
+            raise ValueError(f'Expected Kaggle data with shape (N, T, 150); got {x.shape}')
+        N, T, D = x.shape
+        if D != 150:
+            raise ValueError(f'Expected Kaggle D=150 (25*3*2); got D={D}')
+        # (N, T, 2, 25, 3) -> (N, 3, T, 25, 2)
+        return x.reshape((N, T, 2, 25, 3)).transpose(0, 4, 1, 3, 2).astype(np.float32, copy=False)
+
+    @staticmethod
+    def _reshape_ctrgcn(x):
+        if x.ndim != 5:
+            raise ValueError(f'Expected CTR-GCN tensor shaped (N, C, T, V, M); got {x.shape}')
+        return x.astype(np.float32, copy=False)
+
     def load_data(self):
         # data: N C V T M
-        npz_data = np.load(self.data_path)
-        if self.split == 'train':
-            self.data = npz_data['x_train']
-            self.label = np.where(npz_data['y_train'] > 0)[1]
-            self.sample_name = ['train_' + str(i) for i in range(len(self.data))]
-        elif self.split == 'test':
-            self.data = npz_data['x_test']
-            self.label = np.where(npz_data['y_test'] > 0)[1]
-            self.sample_name = ['test_' + str(i) for i in range(len(self.data))]
+        mmap_mode = 'r' if self.use_mmap else None
+        raw = np.load(self.data_path, allow_pickle=True, mmap_mode=mmap_mode)
+
+        if isinstance(raw, np.lib.npyio.NpzFile) and f'x_{self.split}' in raw and f'y_{self.split}' in raw:
+            data = raw[f'x_{self.split}']
+            label = raw[f'y_{self.split}']
+            data = self._reshape_kaggle(data)
+            label = self._convert_labels(label)
+            split_prefix = self.split
         else:
-            raise NotImplementedError('data split only supports train/test')
-        N, T, _ = self.data.shape
-        self.data = self.data.reshape((N, T, 2, 25, 3)).transpose(0, 4, 1, 3, 2)
+            if self.label_path is None:
+                raise ValueError('label_path must be provided for non-Kaggle data layouts.')
+            data = self._reshape_ctrgcn(raw)
+            label_raw = np.load(self.label_path, allow_pickle=True)
+            label = self._convert_labels(label_raw)
+            split_prefix = os.path.splitext(os.path.basename(self.data_path))[0]
+
+        if self.debug:
+            data = data[:100]
+            label = label[:100]
+
+        self.data = data
+        self.label = label
+        self.sample_name = [f'{split_prefix}_{i}' for i in range(len(self.data))]
 
     def get_mean_map(self):
         data = self.data
