@@ -20,6 +20,7 @@ CTR-GCN, `msg3d.docker` for MS-G3D) while leaving room to add more backbones.
 - [Build & Run: FreqMixFormer](#-build--run-freqmixformer)
 - [Build & Run: SkateFormer](#-build--run-skateformer)
 - [Build & Run: Hyper-GCN](#-build--run-hyper-gcn)
+- [Build & Run: FS-VAE](#-build--run-fs-vae)
 - [Helper Scripts & Benchmarks](#-helper-scripts--benchmarks)
 - [Future Work](#-future-work)
 
@@ -82,13 +83,14 @@ It is also a starting point for research on:
   - `/home/datasets/NTU60/kaggle_raw/NTU60_CS.npz` – Kaggle download (one file drives all stacks here)
   - FreqMixFormer and CTR-GCN both accept the Kaggle NPZ directly; mount `/home/datasets/NTU60` into `/workspace/data/NTU60` for FreqMixFormer or bind the single file for CTR-GCN
   - `$HOME/MS-G3D_workdir` – writable work directory for MS-G3D runs
+  - `/home/weights/CLIP/` – optional cache for CLIP text encoder weights (ViT-B-32.pt, ViT-B-16.pt) used by FS-VAE
 
 ## 📦 Data Preparation
 
 The documentation assumes the NTU RGB+D 60 dataset lives outside the container at
-`/home/datasets/NTU60`. If your data sits elsewhere, adjust the host paths and bind mounts
-in the commands below. Keep raw downloads and converted formats together so each model can
-reuse the same source files.
+`/home/datasets/NTU60`, and CLIP weights (when used) at `/home/weights/CLIP`. If your data
+or weights sit elsewhere, adjust the host paths and bind mounts in the commands below. Keep
+raw downloads and converted formats together so each model can reuse the same source files.
 
 ```text
 datasets/
@@ -589,6 +591,79 @@ python3 smoke_test_kaggle.py --device cuda:0 --batch-size 2 --window-size 48
 ```
 
 The feeder auto-converts Kaggle one-hot labels to class indices and reshapes `(N, T, 150)` to `(N, 3, T, 25, 2)`.
+
+---
+# 🚀 Build & Run: FS-VAE
+
+FS-VAE targets zero-shot skeleton action recognition. The scripts expect precomputed skeleton features and text embeddings (CLIP-based) stored alongside the repo.
+
+### Build image
+
+```bash
+docker build -t skeleton-lab:fsvae -f fsvae.docker .
+```
+
+### Prepare data (host)
+
+Place the FS-VAE assets under `/home/datasets/NTU60/fsvae` (adjust if you use a different root):
+
+```text
+/home/datasets/NTU60/fsvae/
+├── sk_feats/
+│   ├── shift_5_r/
+│   │   ├── train.npy
+│   │   ├── train_label.npy
+│   │   ├── ztest.npy
+│   │   ├── z_label.npy
+│   │   ├── gtest.npy or val.npy (split-dependent)
+│   │   └── g_label.npy or val_label.npy
+│   └── shift_val_5_r/ ... (validation split used by fsvae_60.sh)
+├── text_feats/
+│   └── ViT-B/32/
+│       ├── lb_60.npy
+│       ├── ad_60.npy
+│       └── md_60.npy
+└── results/            # writable output directory
+```
+
+- The text features can be generated via `gen_text_feat.py` (requires downloading CLIP ViT weights from the public URLs in `text_extractor/text_encoder.py`) or by pre-downloading and placing the `.npy` files under `text_feats/ViT-B/32/`.
+- If you cannot reach the CLIP URLs from inside Docker, download `ViT-B-32.pt` (and optionally `ViT-B-16.pt`) on the host and place them in `FS-VAE/text_extractor/` before building the image. You can also mount a shared weights cache (e.g., `/home/weights/CLIP`) into `FS-VAE/text_extractor` so the files are picked up without downloading.
+
+### Run container
+
+```bash
+docker run -it --rm --gpus all --shm-size=8g \
+  --mount type=bind,source=/home/datasets/NTU60/fsvae/sk_feats,target=/workspace/FS-VAE/sk_feats,readonly \
+  --mount type=bind,source=/home/datasets/NTU60/fsvae/text_feats,target=/workspace/FS-VAE/text_feats,readonly \
+  --mount type=bind,source=/home/datasets/NTU60/fsvae/results,target=/workspace/FS-VAE/results \
+  --mount type=bind,source=/home/weights/CLIP,target=/workspace/FS-VAE/text_extractor,readonly \
+  skeleton-lab:fsvae
+```
+
+### Example training command (NTU-60, split size 5, rotation split)
+
+Inside the container:
+
+```bash
+cd /workspace/FS-VAE
+python3 train.py \
+  --ntu 60 --ss 5 --st r --ve shift --le ViT-B/32 --tm lb_ad_md \
+  --num_cycles 10 --num_epoch_per_cycle 1700 --latent_size 100 \
+  --gpu 0 --phase train --mode train \
+  --dataset sk_feats/shift_5_r/ --wdir results/5_r
+```
+
+- Use `fsvae_60.sh` for the full staged training (train → val → gating train/eval → logging) once the `sk_feats`, `text_feats`, and `results` directories are mounted.
+- Swap `--ntu 120` and the paths to the NTU-120 features to mirror `fsvae_120.sh`.
+
+### Quick smoke test (no dataset needed)
+
+```bash
+cd /workspace/FS-VAE
+python3 smoke_test.py --device cpu
+```
+
+This only exercises the encoders/decoders on random tensors and does not read any data files.
 
 ---
 

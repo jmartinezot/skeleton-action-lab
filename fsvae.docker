@@ -1,0 +1,70 @@
+# ============================================================
+# Skeleton Action Lab: FS-VAE (ICCV 2025)
+# ============================================================
+#
+# Build:
+#   docker build -t skeleton-lab:fsvae -f fsvae.docker .
+#
+# Run (mount FS-VAE skeleton/text features and an output dir):
+#   docker run -it --rm --gpus all --shm-size=8g \
+#     --mount type=bind,source=/home/datasets/NTU60/fsvae/sk_feats,target=/workspace/FS-VAE/sk_feats,readonly \
+#     --mount type=bind,source=/home/datasets/NTU60/fsvae/text_feats,target=/workspace/FS-VAE/text_feats,readonly \
+#     --mount type=bind,source=/home/datasets/NTU60/fsvae/results,target=/workspace/FS-VAE/results \
+#     skeleton-lab:fsvae
+#
+# Inside the container (NTU-60, one split from fsvae_60.sh):
+#   cd /workspace/FS-VAE
+#   python3 train.py \
+#     --ntu 60 --ss 5 --st r --ve shift --le ViT-B/32 --tm lb_ad_md \
+#     --num_cycles 10 --num_epoch_per_cycle 1700 --latent_size 100 \
+#     --gpu 0 --phase train --mode train \
+#     --dataset sk_feats/shift_5_r/ --wdir results/5_r
+#
+# Quick smoke test (no dataset needed):
+#   python3 smoke_test.py --device cpu
+
+FROM pytorch/pytorch:2.3.0-cuda12.1-cudnn8-runtime
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    TZ=Etc/UTC \
+    PYTHONUNBUFFERED=1
+
+# ------------------------------------------------------------------
+# System dependencies
+# ------------------------------------------------------------------
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    wget \
+    vim \
+    ca-certificates \
+    build-essential \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+
+# ------------------------------------------------------------------
+# Copy FS-VAE source
+# ------------------------------------------------------------------
+COPY FS-VAE /workspace/FS-VAE
+
+# ------------------------------------------------------------------
+# Python dependencies (torch/torchvision come from the base image)
+# ------------------------------------------------------------------
+RUN pip install --no-cache-dir \
+    "numpy<2.0" \
+    h5py \
+    scikit-learn \
+    tqdm
+
+# Make local modules importable
+ENV PYTHONPATH=/workspace/FS-VAE:${PYTHONPATH}
+
+# Create common mount points
+RUN mkdir -p \
+    /workspace/FS-VAE/sk_feats \
+    /workspace/FS-VAE/text_feats \
+    /workspace/FS-VAE/results
+
+WORKDIR /workspace/FS-VAE
+
+CMD ["/bin/bash"]
