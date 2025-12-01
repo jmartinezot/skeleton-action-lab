@@ -740,6 +740,12 @@ This only exercises the encoders/decoders on random tensors and does not read an
 All Python utilities at the repository root are copied into `/workspace/scripts` during the
 Docker build for quick access inside containers.
 
+### Smoke tests
+
+| Script | Purpose |
+|--------|---------|
+| `smoke_test_all.py` | Run every model's smoke test **inside its Docker image**. Uses synthetic inputs by default; add `--use-gpus` for GPU, `--hyper-data /home/datasets/NTU60/kaggle_raw/NTU60_CS.npz` to exercise Hyper-GCN on the Kaggle file. Rebuild images after updating smoke tests so the scripts are available in the containers. |
+
 ### Dataset tools and sanity checks
 
 | Script | Purpose |
