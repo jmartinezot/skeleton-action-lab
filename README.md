@@ -14,14 +14,16 @@ CTR-GCN, `msg3d.docker` for MS-G3D) while leaving room to add more backbones.
 - [Stack Overview](#-stack-overview)
 - [Prerequisites](#-prerequisites)
 - [Data Preparation](#-data-preparation)
-- [Build & Run: Baselines](#-build--run-baselines)
-- [Build & Run: CTR-GCN](#-build--run-ctr-gcn)
-- [Build & Run: MS-G3D](#-build--run-ms-g3d)
-- [Build & Run: FreqMixFormer](#-build--run-freqmixformer)
-- [Build & Run: SkateFormer](#-build--run-skateformer)
-- [Build & Run: Hyper-GCN](#-build--run-hyper-gcn)
-- [Build & Run: FS-VAE](#-build--run-fs-vae)
-- [Build & Run: MSF-GZSSAR](#-build--run-msf-gzssar)
+- [Supervised Classification](#-supervised-classification)
+  - [Build & Run: Baselines](#-build--run-baselines)
+  - [Build & Run: CTR-GCN](#-build--run-ctr-gcn)
+  - [Build & Run: MS-G3D](#-build--run-ms-g3d)
+  - [Build & Run: FreqMixFormer](#-build--run-freqmixformer)
+  - [Build & Run: SkateFormer](#-build--run-skateformer)
+  - [Build & Run: Hyper-GCN](#-build--run-hyper-gcn)
+- [Zero-Shot / Cross-Modal Classification](#-zero-shot--cross-modal-classification)
+  - [Build & Run: FS-VAE](#-build--run-fs-vae)
+  - [Build & Run: MSF-GZSSAR](#-build--run-msf-gzssar)
 - [Helper Scripts & Benchmarks](#-helper-scripts--benchmarks)
 - [Future Work](#-future-work)
 
@@ -147,7 +149,11 @@ python3 /workspace/scripts/train_skeleton_gcn.py \
 ```
 
 ---
-# 🚀 Build & Run: Baselines
+## 🏹 Supervised Classification
+
+Supervised skeleton classifiers trained end-to-end on labeled NTU60 joints. Use these when you have ground-truth action labels and want the fastest path to solid baselines and sota(-ish) performance.
+
+### 🚀 Build & Run: Baselines
 
 Baseline scripts (MLP sanity checks, tiny ST-GCN, synthetic benchmarks) live in `baselines/`
 and run off the Kaggle NPZ or synthetic data.
@@ -187,7 +193,7 @@ Notes:
 - CTR-GCN–specific training loops were moved to `ctrgcn_extras/` and are not part of the
   baselines image.
 
-# 🚀 Build & Run: CTR-GCN
+### 🚀 Build & Run: CTR-GCN
 
 CTR-GCN can read the Kaggle NTU60 NPZ directly (no extra conversion required). Bind-mount
 the Kaggle file into `/workspace/CTR-GCN/data/ntu/NTU60_CS.npz`.
@@ -235,47 +241,7 @@ python3 main.py \
   --num-worker 0
 ```
 
-# 🚀 Build & Run: Baselines
-
-Baseline scripts (MLP sanity checks, tiny ST-GCN, synthetic benchmarks) live in `baselines/`
-and run off the Kaggle NPZ or synthetic data.
-
-### Build image
-
-```bash
-docker build -t skeleton-lab:baselines -f baselines.docker .
-```
-
-### Run container (mount Kaggle NPZ)
-
-```bash
-docker run -it --rm --gpus all \
-  --shm-size=8g \
-  --mount type=bind,source=/home/datasets/NTU60/kaggle_raw/NTU60_CS.npz,target=/workspace/data/NTU60/NTU60_CS.npz,readonly \
-  skeleton-lab:baselines
-```
-
-Inside the container:
-
-```bash
-# GPU sanity
-python /workspace/baselines/check_gpu.py
-
-# MLP sanity run on Kaggle NPZ
-python /workspace/baselines/train_npz_mlp.py
-
-# Synthetic model timings
-python /workspace/baselines/benchmark_models.py --steps 50 --device cuda:0 --amp
-```
-
-Notes:
-- `train_skeleton_gcn.py` / `train_skeleton_gcn_simple_backbone.py` and the shared dataset
-  now accept Kaggle or CTR layouts directly (the loader reshapes Kaggle `(N, T, 150)` to
-  `(N, 3, T, 25, 2)` and converts one-hot labels).
-- CTR-GCN–specific training loops were moved to `ctrgcn_extras/` and are not part of the
-  baselines image.
-
-# 🚀 Build & Run: MS-G3D
+### 🚀 Build & Run: MS-G3D
 
 MS-G3D now trains directly from the Kaggle NPZ (no MS-G3D `xsub` layout needed).
 
@@ -342,7 +308,7 @@ Feel free to shrink further for quicker runs: e.g., `--batch-size 4 --forward-ba
 and `--train-window-size 48` (or 32) if VRAM is tight.
 
 ---
-# 🚀 Build & Run: FreqMixFormer
+### 🚀 Build & Run: FreqMixFormer
 
 FreqMixFormer can read either the Kaggle `(N, T, 150)` NTU60 file or a CTR-GCN-path symlink of that file. Point the config to whichever path you mount.
 
@@ -399,7 +365,7 @@ python3 main.py \
 ```
 
 ---
-# 🚀 Build & Run: SkateFormer
+### 🚀 Build & Run: SkateFormer
 
 SkateFormer consumes the Kaggle-format NTU60 archive (`NTU60_CS.npz` with `x_train/x_test/y_train/y_test`) and aligns with the same PyTorch 2.3 / CUDA 12.1 base as the other stacks.
 
@@ -542,7 +508,7 @@ Any flag you pass on the CLI overrides the YAML value, so you can mix and match 
 > ℹ️ Saved checkpoints are named `runs-{epoch}-{global_step}.pt` (e.g., `runs-1-5011.pt` for a 1-epoch run with 5,011 batches). Adjust the `--weights` path in the test command to the actual filename produced in your `work_dir`.
 
 ---
-# 🚀 Build & Run: Hyper-GCN
+### 🚀 Build & Run: Hyper-GCN
 
 Hyper-GCN now reads the Kaggle NTU60 NPZ directly (`x_train/x_test` one-hot). Mount the Kaggle file into `Hyper-GCN/data/NTU60_CS.npz` inside the container.
 
@@ -594,7 +560,11 @@ python3 smoke_test_kaggle.py --device cuda:0 --batch-size 2 --window-size 48
 The feeder auto-converts Kaggle one-hot labels to class indices and reshapes `(N, T, 150)` to `(N, 3, T, 25, 2)`.
 
 ---
-# 🚀 Build & Run: FS-VAE
+## 🧩 Zero-Shot / Cross-Modal Classification
+
+Models that align skeleton features with text/vision embeddings for zero-shot or cross-modal retrieval-style classification. Use these when you want to classify actions without per-action fine-tuning labels or to mix text/video priors.
+
+### 🚀 Build & Run: FS-VAE
 
 FS-VAE targets zero-shot skeleton action recognition. The scripts expect precomputed skeleton features and text embeddings (CLIP-based) stored alongside the repo.
 
@@ -667,7 +637,7 @@ python3 smoke_test.py --device cpu
 This only exercises the encoders/decoders on random tensors and does not read any data files.
 
 ---
-# 🚀 Build & Run: MSF-GZSSAR
+### 🚀 Build & Run: MSF-GZSSAR
 
 MSF-GZSSAR is the ICIG 2023 generalized zero-shot baseline (multi-semantic fusion). It uses the same type of precomputed skeleton/text features as FS-VAE.
 
@@ -745,6 +715,7 @@ Docker build for quick access inside containers.
 | Script | Purpose |
 |--------|---------|
 | `smoke_test_all.py` | Run every model's smoke test **inside its Docker image**. Uses synthetic inputs by default; add `--use-gpus` for GPU, `--hyper-data /home/datasets/NTU60/kaggle_raw/NTU60_CS.npz` to exercise Hyper-GCN on the Kaggle file. Rebuild images after updating smoke tests so the scripts are available in the containers. |
+| `build_all_images.sh` | Convenience script to rebuild all Docker images (`skeleton-lab:*`). Run from the repo root: `bash build_all_images.sh`. |
 
 ### Dataset tools and sanity checks
 

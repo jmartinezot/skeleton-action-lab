@@ -82,8 +82,7 @@ class MLP(nn.Module):
 
 def reparameterize(mu, logvar):
     sigma = torch.exp(0.5*logvar)
-    # eps = torch.randn_like(sigma)
-    eps = torch.FloatTensor(sigma.size()[0], 1).normal_(0, 1).expand(sigma.size()).cuda()
+    eps = torch.randn_like(sigma)
     return eps*sigma + mu
 
 def KL_divergence(mu, logvar):

@@ -92,9 +92,10 @@ class Spatial_Freq_MixFormer(nn.Module):
 
     def forward(self, x0):
         N, C, T, V = x0.size() 
-        A = self.A_SE.cuda(x0.get_device()) + self.A_GEME 
+        # Keep adjacency on the same device as the activations (CPU or GPU)
+        A = self.A_SE.to(x0.device) + self.A_GEME.to(x0.device)
         norm_learn_A = A.repeat(1,self.out_channels//self.groups,1,1)   
-        A_final=torch.zeros([N,self.num_subset,self.out_channels,25,25],dtype=torch.float,device='cuda').detach()     
+        A_final=torch.zeros([N,self.num_subset,self.out_channels,25,25],dtype=torch.float,device=x0.device).detach()
         m = x0         
         m = self.conv(m)
         n, kc, t, v = m.size()

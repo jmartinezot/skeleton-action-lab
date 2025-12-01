@@ -57,7 +57,11 @@ def run_test(test: SmokeTest, use_gpus: bool) -> Tuple[bool, str, str, float]:
 
 def main():
     parser = argparse.ArgumentParser(description="Run all Skeleton Action Lab smoke tests (Docker-based)")
-    parser.add_argument("--device", default="cpu", help="torch device to pass into each smoke test, e.g., cpu or cuda:0")
+    parser.add_argument(
+        "--device",
+        default=None,
+        help="torch device to pass into each smoke test, e.g., cpu or cuda:0 (default: cuda:0 if --use-gpus else cpu)",
+    )
     parser.add_argument("--use-gpus", action="store_true", help="add --gpus all to docker run")
     parser.add_argument(
         "--hyper-data",
@@ -73,21 +77,24 @@ def main():
         print("docker not found on PATH; please install Docker and retry.", file=sys.stderr)
         sys.exit(1)
 
+    # Default device: cuda:0 when GPUs requested, otherwise cpu
+    device = args.device or ("cuda:0" if args.use_gpus else "cpu")
+
     # Base tests (all use synthetic data unless you mount the Kaggle NPZ for Hyper-GCN)
     tests: List[SmokeTest] = [
-        SmokeTest("Baselines", "skeleton-lab:baselines", "/workspace/baselines", ["python3", "smoke_test.py", "--device", args.device]),
-        SmokeTest("CTR-GCN", "skeleton-lab:ctrgcn", "/workspace/CTR-GCN", ["python3", "smoke_test.py", "--device", args.device]),
-        SmokeTest("MS-G3D", "skeleton-lab:msg3d", "/workspace/MS-G3D", ["python3", "smoke_test.py", "--device", args.device]),
-        SmokeTest("FreqMixFormer", "skeleton-lab:freqmixformer", "/workspace/FreqMixFormer", ["python3", "smoke_test.py", "--device", args.device]),
-        SmokeTest("SkateFormer", "skeleton-lab:skateformer", "/workspace/SkateFormer", ["python3", "smoke_test.py", "--device", args.device]),
+        SmokeTest("Baselines", "skeleton-lab:baselines", "/workspace/baselines", ["python3", "smoke_test.py", "--device", device]),
+        SmokeTest("CTR-GCN", "skeleton-lab:ctrgcn", "/workspace/CTR-GCN", ["python3", "smoke_test.py", "--device", device]),
+        SmokeTest("MS-G3D", "skeleton-lab:msg3d", "/workspace/MS-G3D", ["python3", "smoke_test.py", "--device", device]),
+        SmokeTest("FreqMixFormer", "skeleton-lab:freqmixformer", "/workspace/FreqMixFormer", ["python3", "smoke_test.py", "--device", device]),
+        SmokeTest("SkateFormer", "skeleton-lab:skateformer", "/workspace/SkateFormer", ["python3", "smoke_test.py", "--device", device]),
         SmokeTest(
             "Hyper-GCN",
             "skeleton-lab:hypergcn",
             "/workspace/Hyper-GCN",
-            ["python3", "smoke_test_kaggle.py", "--device", args.device, "--window-size", str(args.hyper_window)],
+            ["python3", "smoke_test_kaggle.py", "--device", device, "--window-size", str(args.hyper_window)],
         ),
-        SmokeTest("FS-VAE", "skeleton-lab:fsvae", "/workspace/FS-VAE", ["python3", "smoke_test.py", "--device", args.device]),
-        SmokeTest("MSF-GZSSAR", "skeleton-lab:msf-gzssar", "/workspace/MSF-GZSSAR", ["python3", "smoke_test.py", "--device", args.device]),
+        SmokeTest("FS-VAE", "skeleton-lab:fsvae", "/workspace/FS-VAE", ["python3", "smoke_test.py", "--device", device]),
+        SmokeTest("MSF-GZSSAR", "skeleton-lab:msf-gzssar", "/workspace/MSF-GZSSAR", ["python3", "smoke_test.py", "--device", device]),
     ]
 
     # Optional Hyper-GCN data mount

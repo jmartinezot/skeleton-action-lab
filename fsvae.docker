@@ -54,6 +54,7 @@ RUN pip install --no-cache-dir \
     "numpy<2.0" \
     h5py \
     scikit-learn \
+    torch-dct \
     tqdm
 
 # Make local modules importable
